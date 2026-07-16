@@ -93,6 +93,13 @@ uma conta pessoal do Gmail:
 4. Roda o teste do webhook normalmente (seção abaixo) — o e-mail deve
    chegar na sua caixa de verdade, com os dois anexos.
 
+Se der erro `self-signed certificate in certificate chain`, é rede
+corporativa (antivírus/proxy) interceptando TLS — adicione no `.env`:
+```
+SMTP_TLS_REJECT_UNAUTHORIZED=false
+```
+(só para teste local; nunca em produção).
+
 Depois que o app registration do Graph estiver pronto, é só trocar
 `MAIL_PROVIDER=graph` e preencher `GRAPH_*`/`MAIL_FROM` — nenhuma mudança de
 código necessária.

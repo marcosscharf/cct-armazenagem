@@ -15,6 +15,11 @@ function smtpTransport() {
     port: config.smtp.port,
     secure: config.smtp.port === 465,
     auth: { user: config.smtp.user, pass: config.smtp.pass },
+    // Em redes corporativas com antivírus/proxy que interceptam TLS
+    // (certificado próprio no meio do caminho), a validação do certificado
+    // do Gmail falha. SMTP_TLS_REJECT_UNAUTHORIZED=false contorna isso —
+    // usar só para teste local, nunca em produção.
+    tls: { rejectUnauthorized: config.smtp.tlsRejectUnauthorized },
   });
 }
 

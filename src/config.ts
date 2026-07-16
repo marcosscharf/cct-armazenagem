@@ -50,6 +50,10 @@ export const config = {
     port: Number(process.env.SMTP_PORT ?? 587),
     user: process.env.SMTP_USER ?? "",
     pass: process.env.SMTP_PASS ?? "",
+    // false = não valida o certificado TLS do servidor SMTP. Necessário em
+    // redes corporativas que interceptam TLS (antivírus/proxy). Padrão
+    // true (seguro); só desative para teste local.
+    tlsRejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== "false",
   },
 
   mail: {
