@@ -114,17 +114,17 @@ export function extrairAwbsDoExtrato(extrato: DuimpExtrato): string[] {
 
 /**
  * Busca a carga no CCT pelo número do AWB para descobrir o ID interno usado
- * nos demais endpoints (ex: emissão de extrato).
- * TODO: path/formato ainda não confirmados — aguardando inspeção de rede real
- * de uma busca por AWB na tela "Detalhar carga" do CCT (o candidato mais
- * provável, visto no dev tools, é algo como
- * `/ccta-backend/api/carga/{numeroAwb}?situacao=A`).
+ * nos demais endpoints (ex: emissão de extrato). Endpoint confirmado via
+ * inspeção de rede real:
+ * GET /ccta-backend/api/carga/consulta/{numeroAwb}?situacao=A
+ * TODO: confirmar em que campo do JSON de resposta vem o ID interno (estamos
+ * assumindo `id`/`idCarga`, ainda não visto num payload real).
  */
 export async function buscarCargaPorAwb(
   numeroAwb: string,
 ): Promise<{ idCarga: string; raw: unknown }> {
   const client = await httpClient();
-  const { data } = await client.get(`/ccta-backend/api/carga/${numeroAwb}`, {
+  const { data } = await client.get(`/ccta-backend/api/carga/consulta/${numeroAwb}`, {
     params: { situacao: "A" },
   });
   const idCarga = data?.id ?? data?.idCarga;
