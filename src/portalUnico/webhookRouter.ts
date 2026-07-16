@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { config } from "../config";
-import { isVinculacaoCargaEvent } from "./webhookTypes";
-import { handleVinculacaoCarga } from "../workflow/solicitarCalculoArmazenagem";
+import { isDuimpRegistroEvent } from "./webhookTypes";
+import { handleDuimpRegistro } from "../workflow/solicitarCalculoArmazenagem";
 
 export const webhookRouter = Router();
 
@@ -20,7 +20,7 @@ webhookRouter.post("/webhooks/portal-unico", async (req, res) => {
 
   const body = req.body;
 
-  if (!isVinculacaoCargaEvent(body)) {
+  if (!isDuimpRegistroEvent(body)) {
     // Evento não reconhecido: responde 200 para não gerar retentativas do
     // Portal Único, mas não processa.
     res.status(200).json({ status: "ignorado", motivo: "formato não reconhecido" });
@@ -36,10 +36,10 @@ webhookRouter.post("/webhooks/portal-unico", async (req, res) => {
   }
 
   try {
-    await handleVinculacaoCarga(body);
+    await handleDuimpRegistro(body);
     res.status(200).json({ status: "processado" });
   } catch (err) {
-    console.error("Falha ao processar evento de vinculação de carga", err);
+    console.error("Falha ao processar evento de registro de DUIMP", err);
     // 500 faz o Portal Único reenviar (até 3 tentativas, uma a cada 5min).
     res.status(500).json({ status: "erro" });
   }

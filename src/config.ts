@@ -25,9 +25,9 @@ export const config = {
     // usado para validar que a chamada recebida realmente veio do Portal Único.
     webhookSecret: process.env.PUCOMEX_WEBHOOK_SECRET ?? "",
 
-    // Identificadores dos eventos de interesse (vinculação de conhecimento de
-    // carga/AWB a documento de saída/DUIMP). Configurável para não exigir
-    // deploy ao ajustar depois de confirmar o catálogo oficial de eventos.
+    // Identificadores dos eventos de interesse. O gatilho é
+    // `dimp-registro-import` (DUIMP registrada). Configurável por env para não
+    // exigir deploy ao ajustar.
     watchedEventIds: (process.env.PUCOMEX_WATCHED_EVENT_IDS ?? "")
       .split(",")
       .map((id) => id.trim())

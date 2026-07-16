@@ -60,6 +60,34 @@ export async function getDuimpExtrato(numeroDuimp: string): Promise<DuimpExtrato
   return { numeroDuimp, raw: data };
 }
 
+/**
+ * Extrai o(s) número(s) de AWB do extrato da DUIMP.
+ * TODO: confirmar em que campo do extrato o AWB aparece (documento de carga /
+ * conhecimento). Por ora faz uma busca defensiva por campos prováveis.
+ */
+export function extrairAwbsDoExtrato(extrato: DuimpExtrato): string[] {
+  const encontrados = new Set<string>();
+  const visitar = (node: unknown): void => {
+    if (node == null) return;
+    if (Array.isArray(node)) {
+      node.forEach(visitar);
+      return;
+    }
+    if (typeof node === "object") {
+      for (const [chave, valor] of Object.entries(node as Record<string, unknown>)) {
+        const c = chave.toLowerCase();
+        if ((c.includes("awb") || c.includes("conhecimento") || c.includes("documentocarga")) &&
+            typeof valor === "string" && valor.trim()) {
+          encontrados.add(valor.trim());
+        }
+        visitar(valor);
+      }
+    }
+  };
+  visitar(extrato.raw);
+  return [...encontrados];
+}
+
 export interface CctCarga {
   numeroAwb: string;
   raw: unknown;

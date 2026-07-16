@@ -5,10 +5,11 @@ cargas aéreas do RioGaleão.
 
 ## Fluxo
 
-1. Portal Único Siscomex notifica (webhook) quando um AWB é vinculado a uma
-   DUIMP.
-2. Este serviço recebe a notificação, busca o extrato da DUIMP e os dados de
-   carga no CCT (via API do Portal Único, autenticando com Chave de Acesso).
+1. Portal Único Siscomex notifica (webhook) quando uma DUIMP é registrada
+   (evento `dimp-registro-import`).
+2. Este serviço recebe a notificação, pega o número da DUIMP, busca o extrato
+   da DUIMP, descobre o AWB a partir do extrato e busca os dados de carga no
+   CCT (via API do Portal Único, autenticando com Chave de Acesso).
 3. Monta e envia por e-mail (Microsoft Graph) a solicitação de cálculo de
    armazenagem para a tarifação do RioGaleão, com os documentos em anexo.
 
@@ -23,8 +24,11 @@ teste. Antes de rodar em produção, confirmar:
   (doc de Autenticação).
 - Paths exatos dos endpoints de extrato de DUIMP e de consulta de carga no
   CCT (`src/portalUnico/client.ts`, marcados com `TODO`).
-- Identificador exato do evento de "vinculação de conhecimento de carga a
-  documento de saída" e o formato real do payload (`src/portalUnico/webhookTypes.ts`).
+- Evento gatilho confirmado: `dimp-registro-import` (resultado da solicitação
+  de registro de uma DUIMP) — já inscrito no Portal Único do usuário. Falta
+  confirmar o formato exato dos nomes de campo do payload real
+  (`src/portalUnico/webhookTypes.ts`) e em que campo do extrato da DUIMP o AWB
+  aparece (`extrairAwbsDoExtrato` em `src/portalUnico/client.ts`).
 - Mecanismo real de validação da chamada de webhook recebida (a doc
   descreve `chaveSecreta`/`chaveAutenticacao` definidos na inscrição —
   hoje o código espera um header simples `x-pucomex-secret` como
@@ -63,10 +67,8 @@ curl -X POST http://localhost:3000/webhooks/portal-unico \
   -H "Content-Type: application/json" \
   -H "x-pucomex-secret: $PUCOMEX_WEBHOOK_SECRET" \
   -d '{
-    "evento": "SUBSTITUIR_PELO_ID_REAL",
+    "evento": "dimp-registro-import",
     "payload": {
-      "tipoDocumentoCarga": "AWB",
-      "numeroDocumentoCarga": "12345678901",
       "numeroDuimp": "26BR0000001234"
     }
   }'

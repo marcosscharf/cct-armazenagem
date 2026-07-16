@@ -1,21 +1,38 @@
-import { getDuimpExtrato, getCctCarga } from "../portalUnico/client";
+import {
+  getDuimpExtrato,
+  getCctCarga,
+  extrairAwbsDoExtrato,
+} from "../portalUnico/client";
 import { sendCalculoArmazenagemEmail } from "../mail/graphMailer";
-import { VinculacaoCargaEvent } from "../portalUnico/webhookTypes";
+import { DuimpRegistroEvent } from "../portalUnico/webhookTypes";
 
-export async function handleVinculacaoCarga(event: VinculacaoCargaEvent): Promise<void> {
+/**
+ * Gatilho: evento `dimp-registro-import` (DUIMP registrada). A partir do
+ * número da DUIMP no evento, busca o extrato, descobre o AWB, busca os dados
+ * de carga no CCT e envia o e-mail de solicitação de cálculo de armazenagem.
+ */
+export async function handleDuimpRegistro(event: DuimpRegistroEvent): Promise<void> {
   const numeroDuimp = event.payload.numeroDuimp;
-  const numeroAwb = event.payload.numeroDocumentoCarga;
 
-  if (!numeroDuimp || !numeroAwb) {
-    throw new Error(
-      `Evento sem numeroDuimp/numeroDocumentoCarga: ${JSON.stringify(event.payload)}`,
-    );
+  if (!numeroDuimp) {
+    throw new Error(`Evento sem numeroDuimp: ${JSON.stringify(event.payload)}`);
   }
 
-  const [duimpExtrato, cctCarga] = await Promise.all([
-    getDuimpExtrato(numeroDuimp),
-    getCctCarga(numeroAwb),
-  ]);
+  const duimpExtrato = await getDuimpExtrato(numeroDuimp);
+
+  const awbs = extrairAwbsDoExtrato(duimpExtrato);
+  if (awbs.length === 0) {
+    throw new Error(`Nenhum AWB encontrado no extrato da DUIMP ${numeroDuimp}`);
+  }
+
+  // Em geral uma DUIMP tem um AWB; se houver mais de um, usa o primeiro e
+  // registra os demais no log para revisão manual.
+  const numeroAwb = awbs[0];
+  if (awbs.length > 1) {
+    console.warn(`DUIMP ${numeroDuimp} tem múltiplos AWBs: ${awbs.join(", ")}. Usando ${numeroAwb}.`);
+  }
+
+  const cctCarga = await getCctCarga(numeroAwb);
 
   await sendCalculoArmazenagemEmail({
     numeroDuimp,
