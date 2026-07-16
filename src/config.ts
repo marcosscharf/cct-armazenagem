@@ -43,16 +43,27 @@ export const config = {
     clientSecret: process.env.GRAPH_CLIENT_SECRET ?? "",
   },
 
+  // Envio via SMTP genérico (ex: Gmail + "senha de app") — alternativa ao
+  // Graph só para testar o envio localmente sem depender do app registration.
+  smtp: {
+    host: process.env.SMTP_HOST ?? "",
+    port: Number(process.env.SMTP_PORT ?? 587),
+    user: process.env.SMTP_USER ?? "",
+    pass: process.env.SMTP_PASS ?? "",
+  },
+
   mail: {
+    // "graph" (produção) ou "smtp" (teste local com conta pessoal).
+    provider: process.env.MAIL_PROVIDER === "smtp" ? "smtp" : "graph",
     from: process.env.MAIL_FROM ?? "",
     toTarifacao: process.env.MAIL_TO_TARIFACAO ?? "",
     cc: (process.env.MAIL_CC ?? "")
       .split(",")
       .map((addr) => addr.trim())
       .filter(Boolean),
-    // Modo de teste: loga o e-mail que seria enviado em vez de chamar o Graph.
-    // Útil para testar o fluxo Portal Único -> anexos antes do app
-    // registration do Graph estar pronto.
+    // Modo de teste: loga o e-mail que seria enviado em vez de enviar de
+    // verdade. Útil para testar o fluxo Portal Único -> anexos sem enviar
+    // nada ainda, nem via Graph nem via SMTP.
     dryRun: process.env.DRY_RUN === "true",
   },
 };

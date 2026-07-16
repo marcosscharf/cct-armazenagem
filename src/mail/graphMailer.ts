@@ -3,18 +3,8 @@ import { ClientSecretCredential } from "@azure/identity";
 import { Client } from "@microsoft/microsoft-graph-client";
 import { TokenCredentialAuthenticationProvider } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
 import { config } from "../config";
-
-export interface EmailAttachment {
-  filename: string;
-  contentType: string;
-  contentBytes: string; // base64
-}
-
-export interface SendCalculoArmazenagemEmailInput {
-  numeroDuimp: string;
-  numeroAwb: string;
-  attachments: EmailAttachment[];
-}
+import { SendCalculoArmazenagemEmailInput } from "./types";
+import { buildSubject, buildBody } from "./message";
 
 function graphClient(): Client {
   const credential = new ClientSecretCredential(
@@ -31,29 +21,11 @@ function graphClient(): Client {
 export async function sendCalculoArmazenagemEmail(
   input: SendCalculoArmazenagemEmailInput,
 ): Promise<void> {
-  if (config.mail.dryRun) {
-    console.log(
-      `[DRY_RUN] E-mail NÃO enviado. Destinatário: ${config.mail.toTarifacao || "(não configurado)"}\n` +
-        `Assunto: Solicitação de cálculo de armazenagem — AWB ${input.numeroAwb} / DUIMP ${input.numeroDuimp}\n` +
-        `Anexos: ${input.attachments.map((a) => `${a.filename} (${a.contentType}, ${Math.round(a.contentBytes.length * 0.75 / 1024)} KB)`).join(", ")}`,
-    );
-    return;
-  }
-
   const client = graphClient();
 
   const message = {
-    subject: `Solicitação de cálculo de armazenagem — AWB ${input.numeroAwb} / DUIMP ${input.numeroDuimp}`,
-    body: {
-      contentType: "Text",
-      content:
-        `Prezados,\n\n` +
-        `Solicitamos o cálculo de armazenagem referente à carga abaixo:\n\n` +
-        `AWB: ${input.numeroAwb}\n` +
-        `DUIMP: ${input.numeroDuimp}\n\n` +
-        `Segue em anexo o extrato da DUIMP e os dados do CCT vinculados.\n\n` +
-        `Solicitação gerada automaticamente.`,
-    },
+    subject: buildSubject(input),
+    body: { contentType: "Text", content: buildBody(input) },
     toRecipients: [{ emailAddress: { address: config.mail.toTarifacao } }],
     ccRecipients: config.mail.cc.map((address) => ({ emailAddress: { address } })),
     attachments: input.attachments.map((attachment) => ({

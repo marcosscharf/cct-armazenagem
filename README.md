@@ -10,8 +10,11 @@ cargas aéreas do RioGaleão.
 2. Este serviço recebe a notificação, pega o número da DUIMP, busca a capa da
    DUIMP, descobre o AWB (Conhecimento de Embarque) e busca os dados de carga
    no CCT (via API do Portal Único, autenticando com Chave de Acesso).
-3. Monta e envia por e-mail (Microsoft Graph) a solicitação de cálculo de
-   armazenagem para a tarifação do RioGaleão, com os documentos em anexo.
+3. Monta e envia por e-mail a solicitação de cálculo de armazenagem para a
+   tarifação do RioGaleão, com os documentos em anexo. Em produção via
+   Microsoft Graph (`MAIL_PROVIDER=graph`); para testar localmente sem
+   depender do app registration, dá para usar SMTP genérico
+   (`MAIL_PROVIDER=smtp`, ex: Gmail com senha de app).
 
 ## Status / pontos em aberto
 
@@ -62,10 +65,37 @@ npm run dev
 
 O servidor sobe em `http://localhost:3000`. Endpoint de saúde: `GET /health`.
 
-Para testar o fluxo Portal Único → anexos sem precisar do Microsoft Graph
-configurado ainda, deixe `DRY_RUN=true` no `.env` — o e-mail não é enviado de
-verdade, só logado no console (destinatário, assunto, nome/tamanho dos
-anexos).
+Para testar o fluxo Portal Único → anexos sem enviar nada ainda, deixe
+`DRY_RUN=true` no `.env` — o e-mail não é enviado de verdade, só logado no
+console (destinatário, assunto, nome/tamanho dos anexos).
+
+### Testando o envio de verdade sem o Graph (Gmail)
+
+Antes de ter o app registration do Microsoft Graph pronto, dá para testar o
+envio de verdade (recebendo o e-mail na sua própria caixa) usando SMTP com
+uma conta pessoal do Gmail:
+
+1. Ative a verificação em duas etapas na sua conta Google (se ainda não
+   tiver).
+2. Gere uma "senha de app" em
+   https://myaccount.google.com/apppasswords (escolha qualquer nome, ex:
+   "cct-armazenagem").
+3. No `.env`:
+   ```
+   MAIL_PROVIDER=smtp
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=465
+   SMTP_USER=seu-email@gmail.com
+   SMTP_PASS=<a senha de app gerada, sem espaços>
+   MAIL_TO_TARIFACAO=seu-email@gmail.com
+   DRY_RUN=false
+   ```
+4. Roda o teste do webhook normalmente (seção abaixo) — o e-mail deve
+   chegar na sua caixa de verdade, com os dois anexos.
+
+Depois que o app registration do Graph estiver pronto, é só trocar
+`MAIL_PROVIDER=graph` e preencher `GRAPH_*`/`MAIL_FROM` — nenhuma mudança de
+código necessária.
 
 ### Testando o webhook localmente
 

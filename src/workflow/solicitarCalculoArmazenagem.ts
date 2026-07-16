@@ -4,7 +4,7 @@ import {
   buscarCargaPorAwb,
   getCctExtratoPdf,
 } from "../portalUnico/client";
-import { sendCalculoArmazenagemEmail } from "../mail/graphMailer";
+import { sendCalculoArmazenagemEmail } from "../mail";
 import { DuimpRegistroEvent } from "../portalUnico/webhookTypes";
 
 /**
