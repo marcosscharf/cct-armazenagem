@@ -7,9 +7,9 @@ cargas aéreas do RioGaleão.
 
 1. Portal Único Siscomex notifica (webhook) quando uma DUIMP é registrada
    (evento `dimp-registro-import`).
-2. Este serviço recebe a notificação, pega o número da DUIMP, busca o extrato
-   da DUIMP, descobre o AWB a partir do extrato e busca os dados de carga no
-   CCT (via API do Portal Único, autenticando com Chave de Acesso).
+2. Este serviço recebe a notificação, pega o número da DUIMP, busca a capa da
+   DUIMP, descobre o AWB (Conhecimento de Embarque) e busca os dados de carga
+   no CCT (via API do Portal Único, autenticando com Chave de Acesso).
 3. Monta e envia por e-mail (Microsoft Graph) a solicitação de cálculo de
    armazenagem para a tarifação do RioGaleão, com os documentos em anexo.
 
@@ -22,8 +22,12 @@ Confirmado via testes reais (curl + inspeção de rede do navegador):
 - Sessão: os módulos de negócio (duimp/ccta) **não** usam
   `Authorization: Bearer` — usam cookie `JWTPCMX_USR` (JWT do header
   `Set-Token`) + header `X-Csrf-Token`.
-- Itens da DUIMP: `GET /duimp/api/duimp/extrato/{numeroDuimp}/{versaoDuimp}/itens`,
-  com retry automático em caso de faixa de itens inválida (erro `DIMP-ER0100`).
+- Capa da DUIMP: `GET /duimp/api/duimp/{numeroDuimp}/consulta?cache=true` —
+  payload real confirmado. O AWB vem em `documentosInstrucao` (item com
+  `tipo.codigo === "30"`, palavra-chave "Número"). O campo
+  `informacaoComplementar` já traz um resumo textual completo (fatura,
+  conhecimento, valores, tributos, despachantes), usado como base do anexo
+  de extrato da DUIMP no e-mail.
 - Evento gatilho: `dimp-registro-import` (resultado da solicitação de
   registro de uma DUIMP) — já inscrito no Portal Único do usuário.
 - CCT: `GET /ccta-backend/api/carga/consulta/{numeroAwb}?situacao=A` busca o
@@ -32,16 +36,11 @@ Confirmado via testes reais (curl + inspeção de rede do navegador):
 
 Ainda em aberto:
 
-- Em que campo do JSON de itens da DUIMP aparece o AWB
-  (`extrairAwbsDoExtrato` em `src/portalUnico/client.ts`) — o endpoint de
-  itens pode não trazer esse dado, exigindo um endpoint de "capa" da DUIMP
-  ainda não identificado. O extrato da DUIMP hoje vai anexado como JSON
-  bruto; se existir um extrato em PDF da DUIMP (como existe no CCT), trocar
-  para ele.
 - Em que campo do JSON de `buscarCargaPorAwb` vem o ID interno da carga
   (assumindo `id`/`idCarga`, ainda não visto num payload real).
 - Formato exato dos nomes de campo do payload real do webhook
-  `dimp-registro-import` (`src/portalUnico/webhookTypes.ts`).
+  `dimp-registro-import` (`src/portalUnico/webhookTypes.ts`) — ainda não
+  observado um evento real, só simulado manualmente.
 - Mecanismo real de validação da chamada de webhook recebida (a doc
   descreve `chaveSecreta`/`chaveAutenticacao` definidos na inscrição —
   hoje o código espera um header simples `x-pucomex-secret` como
@@ -91,7 +90,7 @@ curl -X POST http://localhost:3000/webhooks/portal-unico \
   -d '{
     "evento": "dimp-registro-import",
     "payload": {
-      "numeroDuimp": "26BR0000001234"
+      "numeroDuimp": "26BR00011742683"
     }
   }'
 ```

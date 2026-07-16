@@ -66,80 +66,57 @@ async function httpClient(): Promise<AxiosInstance> {
   });
 }
 
-export interface DuimpExtrato {
+export interface DuimpCapa {
   numeroDuimp: string;
-  versaoDuimp: string;
+  versao: string;
   raw: unknown;
 }
 
 /**
- * Busca os itens da DUIMP. Endpoint e autenticação confirmados via chamada
- * real: GET /duimp/api/duimp/extrato/{numeroDuimp}/{versaoDuimp}/itens
+ * Busca a "capa" da DUIMP (dados gerais: importador, carga, documentos de
+ * instrução, tributos, histórico etc). Endpoint e autenticação confirmados
+ * via chamada real:
+ * GET /duimp/api/duimp/{numeroDuimp}/consulta?cache=true
  *
- * A API valida a faixa de itens contra a quantidade real de itens da DUIMP e
- * retorna 422 (`DIMP-ER0100`) se pedirmos além do último item existente —
- * como não sabemos de antemão quantos itens a DUIMP tem, tentamos uma faixa
- * generosa e, se cair nesse erro, extraímos o limite real da mensagem e
- * tentamos de novo.
- *
- * TODO: confirmar se existe um endpoint separado para os dados de "capa" da
- * DUIMP (importador, documentos de carga vinculados etc) além dos itens —
- * este aqui traz a lista de produtos/NCM, que pode não conter o AWB.
+ * O campo `informacaoComplementar` já traz um resumo textual completo
+ * (fatura, conhecimento, valores, tributos, despachantes) equivalente ao
+ * extrato lido manualmente hoje — por isso é essa a fonte usada para o
+ * anexo de "extrato da DUIMP" no e-mail, não o endpoint de itens.
  */
-export async function getDuimpExtrato(
-  numeroDuimp: string,
-  versaoDuimp = "0001",
-): Promise<DuimpExtrato> {
+export async function getDuimpCapa(numeroDuimp: string): Promise<DuimpCapa> {
   const client = await httpClient();
+  const { data } = await client.get(`/duimp/api/duimp/${numeroDuimp}/consulta`, {
+    params: { cache: true },
+  });
+  return { numeroDuimp, versao: data?.versao, raw: data };
+}
 
-  const buscarItens = (faixaItens: string) =>
-    client.get(`/duimp/api/duimp/extrato/${numeroDuimp}/${versaoDuimp}/itens`, {
-      params: { "faixa-itens": faixaItens, cache: true },
-    });
+interface PalavraChave {
+  nomeApresentacao?: string;
+  valor?: string;
+}
 
-  try {
-    const { data } = await buscarItens("1-999");
-    return { numeroDuimp, versaoDuimp, raw: data };
-  } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.status === 422) {
-      const mensagem: string = err.response.data?.message ?? "";
-      const match = /último item ativo:\s*(\d+)/i.exec(mensagem);
-      if (match) {
-        const { data } = await buscarItens(`1-${match[1]}`);
-        return { numeroDuimp, versaoDuimp, raw: data };
-      }
-    }
-    throw err;
-  }
+interface DocumentoInstrucao {
+  tipo?: { codigo?: string; descricao?: string };
+  palavrasChave?: PalavraChave[];
 }
 
 /**
- * Extrai o(s) número(s) de AWB do extrato da DUIMP.
- * TODO: confirmar em que campo do extrato o AWB aparece (documento de carga /
- * conhecimento) — o endpoint de itens pode não trazer esse dado; nesse caso
- * será preciso um endpoint de "capa"/documentos de carga da DUIMP.
+ * Extrai o número do AWB (Conhecimento de Embarque) da capa da DUIMP.
+ * Confirmado via payload real: em `documentosInstrucao`, o item com
+ * `tipo.codigo === "30"` ("Conhecimento de Embarque") tem uma palavra-chave
+ * "Número" com o AWB limpo (ex: "HA551023") — mais confiável do que extrair
+ * do RUC (`cargaIdentificacao`), que embute o AWB numa string maior de
+ * formato variável.
  */
-export function extrairAwbsDoExtrato(extrato: DuimpExtrato): string[] {
-  const encontrados = new Set<string>();
-  const visitar = (node: unknown): void => {
-    if (node == null) return;
-    if (Array.isArray(node)) {
-      node.forEach(visitar);
-      return;
-    }
-    if (typeof node === "object") {
-      for (const [chave, valor] of Object.entries(node as Record<string, unknown>)) {
-        const c = chave.toLowerCase();
-        if ((c.includes("awb") || c.includes("conhecimento") || c.includes("documentocarga")) &&
-            typeof valor === "string" && valor.trim()) {
-          encontrados.add(valor.trim());
-        }
-        visitar(valor);
-      }
-    }
-  };
-  visitar(extrato.raw);
-  return [...encontrados];
+export function extrairAwbDaCapa(capa: DuimpCapa): string | null {
+  const raw = capa.raw as { documentosInstrucao?: DocumentoInstrucao[] } | undefined;
+  const documentos = raw?.documentosInstrucao ?? [];
+
+  const conhecimento = documentos.find((doc) => doc.tipo?.codigo === "30");
+  const numero = conhecimento?.palavrasChave?.find((p) => p.nomeApresentacao === "Número")?.valor;
+
+  return numero?.trim() || null;
 }
 
 /**
