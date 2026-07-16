@@ -40,8 +40,10 @@ Confirmado via testes reais (curl + inspeção de rede do navegador):
   botão "Gerar Extrato" na tela monta o PDF no navegador (client-side), a
   partir dos mesmos dados da capa. Por isso o anexo de extrato da DUIMP no
   e-mail é gerado localmente (`src/portalUnico/duimpExtratoPdf.ts`, via
-  `pdfkit`), a partir do `informacaoComplementar` — parecido no conteúdo,
-  não idêntico no layout ao PDF oficial.
+  `pdfkit`), replicando o layout das seções relevantes para armazenagem
+  (Identificação, Carga, Histórico). As páginas de item por item do PDF
+  oficial (produto/NCM/fabricante/tributo) foram deixadas de fora — são
+  dados de declaração aduaneira sem relação com o cálculo de armazenagem.
 
 Também implementado: a automação só processa DUIMPs cujo
 `responsavelRegistroNumero` esteja em `PUCOMEX_CPFS_RESPONSAVEIS_AUTORIZADOS`
