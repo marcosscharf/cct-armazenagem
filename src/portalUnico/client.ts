@@ -120,6 +120,16 @@ export function extrairAwbDaCapa(capa: DuimpCapa): string | null {
 }
 
 /**
+ * Extrai o CPF (só dígitos) de quem registrou a DUIMP, a partir do campo
+ * `responsavelRegistroNumero` da capa.
+ */
+export function extrairCpfResponsavelDaCapa(capa: DuimpCapa): string | null {
+  const raw = capa.raw as { responsavelRegistroNumero?: string } | undefined;
+  const cpf = raw?.responsavelRegistroNumero?.replace(/\D/g, "");
+  return cpf || null;
+}
+
+/**
  * Busca a carga no CCT pelo número do AWB para descobrir o ID interno usado
  * nos demais endpoints (ex: emissão de extrato). Endpoint e payload
  * confirmados via chamada real:

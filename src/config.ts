@@ -35,6 +35,17 @@ export const config = {
       .split(",")
       .map((id) => id.trim())
       .filter(Boolean),
+
+    // CPFs (só dígitos) dos despachantes cujas DUIMPs devem disparar a
+    // automação — comparado com `responsavelRegistroNumero` na capa da
+    // DUIMP. Existe acesso de visualização a DUIMPs de clientes cujo
+    // despacho é feito por outra pessoa; sem esse filtro, a automação
+    // dispararia também para processos que não são seus. Vazio = sem
+    // filtro (processa qualquer declarante).
+    cpfsResponsaveisAutorizados: (process.env.PUCOMEX_CPFS_RESPONSAVEIS_AUTORIZADOS ?? "")
+      .split(",")
+      .map((cpf) => cpf.replace(/\D/g, ""))
+      .filter(Boolean),
   },
 
   graph: {

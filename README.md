@@ -37,10 +37,20 @@ Confirmado via testes reais (curl + inspeção de rede do navegador):
   ID interno da carga; `GET /ccta-backend/api/carga/{idCarga}/extrato` emite
   o PDF do extrato do conhecimento de carga (usado como anexo do e-mail).
 
+Também confirmado: `GET /ccta-backend/api/carga/consulta/{numeroAwb}?situacao=A`
+retorna um array de cargas, cada uma com o campo `idCarga`.
+
+Também implementado: a automação só processa DUIMPs cujo
+`responsavelRegistroNumero` esteja em `PUCOMEX_CPFS_RESPONSAVEIS_AUTORIZADOS`
+— necessário porque o Portal Único mostra DUIMPs de clientes cujo despacho é
+feito por outra pessoa, não só as que o usuário mesmo registrou.
+
 Ainda em aberto:
 
-- Em que campo do JSON de `buscarCargaPorAwb` vem o ID interno da carga
-  (assumindo `id`/`idCarga`, ainda não visto num payload real).
+- O anexo da DUIMP hoje vai como JSON bruto da capa
+  (`duimp-{numero}-capa.json`). O ideal é um PDF de verdade (como existe no
+  CCT) — provavelmente atrás de um botão "Gerar Extrato" na tela da DUIMP,
+  endpoint ainda não identificado.
 - Formato exato dos nomes de campo do payload real do webhook
   `dimp-registro-import` (`src/portalUnico/webhookTypes.ts`) — ainda não
   observado um evento real, só simulado manualmente.
