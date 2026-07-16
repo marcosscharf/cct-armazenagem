@@ -136,7 +136,10 @@ export async function buscarCargaPorAwb(
   });
   const idCarga = data?.id ?? data?.idCarga;
   if (!idCarga) {
-    throw new Error(`Não foi possível extrair o ID interno da carga para o AWB ${numeroAwb}`);
+    throw new Error(
+      `Não foi possível extrair o ID interno da carga para o AWB ${numeroAwb}. ` +
+        `Resposta recebida: ${JSON.stringify(data)}`,
+    );
   }
   return { idCarga: String(idCarga), raw: data };
 }
