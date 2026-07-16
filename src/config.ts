@@ -50,6 +50,10 @@ export const config = {
       .split(",")
       .map((addr) => addr.trim())
       .filter(Boolean),
+    // Modo de teste: loga o e-mail que seria enviado em vez de chamar o Graph.
+    // Útil para testar o fluxo Portal Único -> anexos antes do app
+    // registration do Graph estar pronto.
+    dryRun: process.env.DRY_RUN === "true",
   },
 };
 

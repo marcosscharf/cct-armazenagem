@@ -15,35 +15,43 @@ cargas aéreas do RioGaleão.
 
 ## Status / pontos em aberto
 
-Vários detalhes da integração com o Portal Único ainda **não foram
-validados contra uma chamada real** — o ambiente onde este projeto foi
-inicialmente montado não teve acesso à documentação nem a uma conta de
-teste. Antes de rodar em produção, confirmar:
+Confirmado via testes reais (curl + inspeção de rede do navegador):
 
-- Autenticação confirmada: `POST {authBaseUrl}/api/autenticar/chave-acesso`
-  com headers `Client-Id`/`Client-Secret`/`Role-Type` (doc oficial). Falta
-  confirmar: qual `Role-Type` usar, e qual header os endpoints de negócio
-  (duimp/ccta) esperam para repassar o token (hoje assumindo
-  `Authorization: Bearer`, não confirmado).
-- Itens da DUIMP confirmados via inspeção de rede real: `GET
-  /duimp/api/duimp/extrato/{numeroDuimp}/{versaoDuimp}/itens`. Falta
-  confirmar em que campo aparece o AWB (`extrairAwbsDoExtrato` em
-  `src/portalUnico/client.ts`) — o endpoint de itens pode não trazer esse
-  dado, exigindo um endpoint de "capa" da DUIMP ainda não identificado. O
-  extrato da DUIMP hoje vai anexado como JSON bruto; se existir um extrato em
-  PDF da DUIMP (como existe no CCT), trocar para ele.
-- Evento gatilho confirmado: `dimp-registro-import` (resultado da solicitação
-  de registro de uma DUIMP) — já inscrito no Portal Único do usuário. Falta
-  confirmar o formato exato dos nomes de campo do payload real
-  (`src/portalUnico/webhookTypes.ts`).
-- CCT: confirmado que `GET /ccta-backend/api/carga/{idCarga}/extrato` emite o
-  PDF do extrato do conhecimento de carga (usado como anexo do e-mail). Falta
-  confirmar o endpoint que traduz número do AWB → `idCarga` interno
-  (`buscarCargaPorAwb` em `src/portalUnico/client.ts`).
+- Autenticação: `POST {authBaseUrl}/api/autenticar/chave-acesso` com headers
+  `Client-Id`/`Client-Secret`/`Role-Type: IMPEXP`.
+- Sessão: os módulos de negócio (duimp/ccta) **não** usam
+  `Authorization: Bearer` — usam cookie `JWTPCMX_USR` (JWT do header
+  `Set-Token`) + header `X-Csrf-Token`.
+- Itens da DUIMP: `GET /duimp/api/duimp/extrato/{numeroDuimp}/{versaoDuimp}/itens`,
+  com retry automático em caso de faixa de itens inválida (erro `DIMP-ER0100`).
+- Evento gatilho: `dimp-registro-import` (resultado da solicitação de
+  registro de uma DUIMP) — já inscrito no Portal Único do usuário.
+- CCT: `GET /ccta-backend/api/carga/consulta/{numeroAwb}?situacao=A` busca o
+  ID interno da carga; `GET /ccta-backend/api/carga/{idCarga}/extrato` emite
+  o PDF do extrato do conhecimento de carga (usado como anexo do e-mail).
+
+Ainda em aberto:
+
+- Em que campo do JSON de itens da DUIMP aparece o AWB
+  (`extrairAwbsDoExtrato` em `src/portalUnico/client.ts`) — o endpoint de
+  itens pode não trazer esse dado, exigindo um endpoint de "capa" da DUIMP
+  ainda não identificado. O extrato da DUIMP hoje vai anexado como JSON
+  bruto; se existir um extrato em PDF da DUIMP (como existe no CCT), trocar
+  para ele.
+- Em que campo do JSON de `buscarCargaPorAwb` vem o ID interno da carga
+  (assumindo `id`/`idCarga`, ainda não visto num payload real).
+- Formato exato dos nomes de campo do payload real do webhook
+  `dimp-registro-import` (`src/portalUnico/webhookTypes.ts`).
 - Mecanismo real de validação da chamada de webhook recebida (a doc
   descreve `chaveSecreta`/`chaveAutenticacao` definidos na inscrição —
   hoje o código espera um header simples `x-pucomex-secret` como
   placeholder).
+
+**Nota**: o ambiente onde este projeto é desenvolvido bloqueia acesso de
+rede a `portalunico.siscomex.gov.br` — os testes acima foram feitos rodando
+os comandos manualmente na máquina do usuário, não automatizados aqui. Todo
+teste de ponta a ponta (`npm run dev` de verdade) precisa rodar numa máquina
+com acesso normal à internet.
 
 ## Setup local
 
@@ -54,6 +62,11 @@ npm run dev
 ```
 
 O servidor sobe em `http://localhost:3000`. Endpoint de saúde: `GET /health`.
+
+Para testar o fluxo Portal Único → anexos sem precisar do Microsoft Graph
+configurado ainda, deixe `DRY_RUN=true` no `.env` — o e-mail não é enviado de
+verdade, só logado no console (destinatário, assunto, nome/tamanho dos
+anexos).
 
 ### Testando o webhook localmente
 
