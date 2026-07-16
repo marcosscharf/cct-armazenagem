@@ -112,19 +112,37 @@ export function extrairAwbsDoExtrato(extrato: DuimpExtrato): string[] {
   return [...encontrados];
 }
 
-export interface CctCarga {
-  numeroAwb: string;
-  raw: unknown;
+/**
+ * Busca a carga no CCT pelo número do AWB para descobrir o ID interno usado
+ * nos demais endpoints (ex: emissão de extrato).
+ * TODO: path/formato ainda não confirmados — aguardando inspeção de rede real
+ * de uma busca por AWB na tela "Detalhar carga" do CCT (o candidato mais
+ * provável, visto no dev tools, é algo como
+ * `/ccta-backend/api/carga/{numeroAwb}?situacao=A`).
+ */
+export async function buscarCargaPorAwb(
+  numeroAwb: string,
+): Promise<{ idCarga: string; raw: unknown }> {
+  const client = await httpClient();
+  const { data } = await client.get(`/ccta-backend/api/carga/${numeroAwb}`, {
+    params: { situacao: "A" },
+  });
+  const idCarga = data?.id ?? data?.idCarga;
+  if (!idCarga) {
+    throw new Error(`Não foi possível extrair o ID interno da carga para o AWB ${numeroAwb}`);
+  }
+  return { idCarga: String(idCarga), raw: data };
 }
 
 /**
- * Busca os dados de carga/armazenagem no CCT vinculados a um AWB.
- * TODO: path ainda não confirmado contra uma chamada real — pegar do dev
- * tools do navegador (aba Rede, coluna "URL Da Solicitação") ao consultar um
- * AWB no CCT, do mesmo jeito que foi feito para a DUIMP.
+ * Emite o extrato em PDF do conhecimento de carga (equivalente ao botão
+ * "Emitir Extrato" na tela do CCT) — confirmado via inspeção de rede real:
+ * GET /ccta-backend/api/carga/{idCarga}/extrato -> application/pdf
  */
-export async function getCctCarga(numeroAwb: string): Promise<CctCarga> {
+export async function getCctExtratoPdf(idCarga: string): Promise<Buffer> {
   const client = await httpClient();
-  const { data } = await client.get(`/cct/api/ext/priv/carga/${numeroAwb}`);
-  return { numeroAwb, raw: data };
+  const response = await client.get(`/ccta-backend/api/carga/${idCarga}/extrato`, {
+    responseType: "arraybuffer",
+  });
+  return Buffer.from(response.data);
 }

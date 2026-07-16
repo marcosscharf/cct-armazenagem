@@ -20,21 +20,30 @@ validados contra uma chamada real** — o ambiente onde este projeto foi
 inicialmente montado não teve acesso à documentação nem a uma conta de
 teste. Antes de rodar em produção, confirmar:
 
-- `PUCOMEX_TOKEN_URL` e o formato exato da troca client id/secret por token
-  (doc de Autenticação).
-- Paths exatos dos endpoints de extrato de DUIMP e de consulta de carga no
-  CCT (`src/portalUnico/client.ts`, marcados com `TODO`).
+- Autenticação confirmada: `POST {authBaseUrl}/api/autenticar/chave-acesso`
+  com headers `Client-Id`/`Client-Secret`/`Role-Type` (doc oficial). Falta
+  confirmar: qual `Role-Type` usar, e qual header os endpoints de negócio
+  (duimp/ccta) esperam para repassar o token (hoje assumindo
+  `Authorization: Bearer`, não confirmado).
+- Itens da DUIMP confirmados via inspeção de rede real: `GET
+  /duimp/api/duimp/extrato/{numeroDuimp}/{versaoDuimp}/itens`. Falta
+  confirmar em que campo aparece o AWB (`extrairAwbsDoExtrato` em
+  `src/portalUnico/client.ts`) — o endpoint de itens pode não trazer esse
+  dado, exigindo um endpoint de "capa" da DUIMP ainda não identificado. O
+  extrato da DUIMP hoje vai anexado como JSON bruto; se existir um extrato em
+  PDF da DUIMP (como existe no CCT), trocar para ele.
 - Evento gatilho confirmado: `dimp-registro-import` (resultado da solicitação
   de registro de uma DUIMP) — já inscrito no Portal Único do usuário. Falta
   confirmar o formato exato dos nomes de campo do payload real
-  (`src/portalUnico/webhookTypes.ts`) e em que campo do extrato da DUIMP o AWB
-  aparece (`extrairAwbsDoExtrato` em `src/portalUnico/client.ts`).
+  (`src/portalUnico/webhookTypes.ts`).
+- CCT: confirmado que `GET /ccta-backend/api/carga/{idCarga}/extrato` emite o
+  PDF do extrato do conhecimento de carga (usado como anexo do e-mail). Falta
+  confirmar o endpoint que traduz número do AWB → `idCarga` interno
+  (`buscarCargaPorAwb` em `src/portalUnico/client.ts`).
 - Mecanismo real de validação da chamada de webhook recebida (a doc
   descreve `chaveSecreta`/`chaveAutenticacao` definidos na inscrição —
   hoje o código espera um header simples `x-pucomex-secret` como
   placeholder).
-- Formato dos anexos enviados por e-mail: hoje o extrato/dados de carga vão
-  como JSON bruto; provavelmente vale gerar PDF a partir dos dados.
 
 ## Setup local
 
