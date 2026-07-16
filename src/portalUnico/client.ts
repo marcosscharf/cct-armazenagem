@@ -1,26 +1,30 @@
 import axios, { AxiosInstance } from "axios";
 import { config } from "../config";
 
-interface TokenCache {
-  accessToken: string;
+interface Session {
+  jwt: string;
+  csrfToken: string;
   expiresAt: number;
 }
 
-let tokenCache: TokenCache | null = null;
+let sessionCache: Session | null = null;
 
 /**
- * Troca o par Client-Id / Client-Secret (Chave de Acesso) por um token de
- * acesso, conforme docs.portalunico.siscomex.gov.br/api/plat/:
+ * Troca o par Client-Id / Client-Secret (Chave de Acesso) por uma sessão
+ * autenticada, conforme docs.portalunico.siscomex.gov.br/api/plat/:
  * POST {authBaseUrl}/api/autenticar/chave-acesso
  * Headers: Client-Id, Client-Secret, Role-Type
- * O token vem no header `Set-Token` e também no corpo `{ "token": "..." }`.
- * A doc não especifica tempo de vida do token — cacheamos por um período
- * curto e conservador; ajustar se descobrirmos o valor real (ex: via
- * X-CSRF-Expiration, que é de outro token/CSRF, não deste).
+ *
+ * Confirmado via chamadas reais (curl + inspeção de rede do navegador) que o
+ * mecanismo de autenticação nos módulos de negócio (duimp/ccta) NÃO é
+ * "Authorization: Bearer" — é um cookie `JWTPCMX_USR` com o JWT retornado no
+ * header `Set-Token`, combinado com o header `X-Csrf-Token` (retornado no
+ * header `X-CSRF-Token` da autenticação). A validade do CSRF token vem no
+ * header `X-CSRF-Expiration` (epoch em milissegundos).
  */
-async function getAccessToken(): Promise<string> {
-  if (tokenCache && tokenCache.expiresAt > Date.now()) {
-    return tokenCache.accessToken;
+async function authenticate(): Promise<Session> {
+  if (sessionCache && sessionCache.expiresAt > Date.now() + 5_000) {
+    return sessionCache;
   }
 
   const response = await axios.post(
@@ -35,25 +39,30 @@ async function getAccessToken(): Promise<string> {
     },
   );
 
-  const accessToken: string = response.headers["set-token"] ?? response.data?.token;
-  if (!accessToken) {
-    throw new Error("Autenticação no Portal Único não retornou token (Set-Token/body.token)");
+  const jwt: string | undefined = response.headers["set-token"];
+  const csrfToken: string | undefined = response.headers["x-csrf-token"];
+  const expirationHeader = response.headers["x-csrf-expiration"];
+
+  if (!jwt || !csrfToken) {
+    throw new Error(
+      "Autenticação no Portal Único não retornou Set-Token/X-CSRF-Token",
+    );
   }
 
-  const cacheTtlSeconds = 4 * 60; // TODO: confirmar validade real do token
-  tokenCache = { accessToken, expiresAt: Date.now() + cacheTtlSeconds * 1000 };
+  const expiresAt = expirationHeader ? Number(expirationHeader) : Date.now() + 4 * 60 * 1000;
 
-  return accessToken;
+  sessionCache = { jwt, csrfToken, expiresAt };
+  return sessionCache;
 }
 
 async function httpClient(): Promise<AxiosInstance> {
-  const token = await getAccessToken();
+  const { jwt, csrfToken } = await authenticate();
   return axios.create({
     baseURL: config.pucomex.apiBaseUrl,
-    // TODO: confirmar o header esperado pelos endpoints de negócio (duimp/cct)
-    // para repassar o token de sessão — assumindo Authorization: Bearer por
-    // ora; pode ser que esperem o mesmo header Set-Token/Authorization diferente.
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Cookie: `JWTPCMX_USR=${jwt}`,
+      "X-Csrf-Token": csrfToken,
+    },
   });
 }
 
@@ -64,8 +73,14 @@ export interface DuimpExtrato {
 }
 
 /**
- * Busca os itens da DUIMP. Endpoint confirmado via inspeção de rede real:
- * GET /duimp/api/duimp/extrato/{numeroDuimp}/{versaoDuimp}/itens?faixa-itens=1-128&cache=true
+ * Busca os itens da DUIMP. Endpoint e autenticação confirmados via chamada
+ * real: GET /duimp/api/duimp/extrato/{numeroDuimp}/{versaoDuimp}/itens
+ *
+ * A API valida a faixa de itens contra a quantidade real de itens da DUIMP e
+ * retorna 422 (`DIMP-ER0100`) se pedirmos além do último item existente —
+ * como não sabemos de antemão quantos itens a DUIMP tem, tentamos uma faixa
+ * generosa e, se cair nesse erro, extraímos o limite real da mensagem e
+ * tentamos de novo.
  *
  * TODO: confirmar se existe um endpoint separado para os dados de "capa" da
  * DUIMP (importador, documentos de carga vinculados etc) além dos itens —
@@ -76,11 +91,26 @@ export async function getDuimpExtrato(
   versaoDuimp = "0001",
 ): Promise<DuimpExtrato> {
   const client = await httpClient();
-  const { data } = await client.get(
-    `/duimp/api/duimp/extrato/${numeroDuimp}/${versaoDuimp}/itens`,
-    { params: { "faixa-itens": "1-128", cache: true } },
-  );
-  return { numeroDuimp, versaoDuimp, raw: data };
+
+  const buscarItens = (faixaItens: string) =>
+    client.get(`/duimp/api/duimp/extrato/${numeroDuimp}/${versaoDuimp}/itens`, {
+      params: { "faixa-itens": faixaItens, cache: true },
+    });
+
+  try {
+    const { data } = await buscarItens("1-999");
+    return { numeroDuimp, versaoDuimp, raw: data };
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 422) {
+      const mensagem: string = err.response.data?.message ?? "";
+      const match = /último item ativo:\s*(\d+)/i.exec(mensagem);
+      if (match) {
+        const { data } = await buscarItens(`1-${match[1]}`);
+        return { numeroDuimp, versaoDuimp, raw: data };
+      }
+    }
+    throw err;
+  }
 }
 
 /**
