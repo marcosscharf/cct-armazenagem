@@ -5,6 +5,7 @@ import {
   buscarCargaPorAwb,
   getCctExtratoPdf,
 } from "../portalUnico/client";
+import { gerarExtratoDuimpPdf } from "../portalUnico/duimpExtratoPdf";
 import { sendCalculoArmazenagemEmail } from "../mail";
 import { config } from "../config";
 import { DuimpRegistroEvent } from "../portalUnico/webhookTypes";
@@ -43,16 +44,19 @@ export async function handleDuimpRegistro(event: DuimpRegistroEvent): Promise<vo
   }
 
   const { idCarga } = await buscarCargaPorAwb(numeroAwb);
-  const cctExtratoPdf = await getCctExtratoPdf(idCarga);
+  const [cctExtratoPdf, duimpExtratoPdf] = await Promise.all([
+    getCctExtratoPdf(idCarga),
+    gerarExtratoDuimpPdf(duimpCapa),
+  ]);
 
   await sendCalculoArmazenagemEmail({
     numeroDuimp,
     numeroAwb,
     attachments: [
       {
-        filename: `duimp-${numeroDuimp}-capa.json`,
-        contentType: "application/json",
-        contentBytes: Buffer.from(JSON.stringify(duimpCapa.raw, null, 2)).toString("base64"),
+        filename: `duimp-${numeroDuimp}-extrato.pdf`,
+        contentType: "application/pdf",
+        contentBytes: duimpExtratoPdf.toString("base64"),
       },
       {
         filename: `cct-${numeroAwb}-extrato.pdf`,

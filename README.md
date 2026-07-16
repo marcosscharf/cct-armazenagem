@@ -29,16 +29,19 @@ Confirmado via testes reais (curl + inspeção de rede do navegador):
   payload real confirmado. O AWB vem em `documentosInstrucao` (item com
   `tipo.codigo === "30"`, palavra-chave "Número"). O campo
   `informacaoComplementar` já traz um resumo textual completo (fatura,
-  conhecimento, valores, tributos, despachantes), usado como base do anexo
-  de extrato da DUIMP no e-mail.
+  conhecimento, valores, tributos, despachantes).
 - Evento gatilho: `dimp-registro-import` (resultado da solicitação de
   registro de uma DUIMP) — já inscrito no Portal Único do usuário.
-- CCT: `GET /ccta-backend/api/carga/consulta/{numeroAwb}?situacao=A` busca o
-  ID interno da carga; `GET /ccta-backend/api/carga/{idCarga}/extrato` emite
-  o PDF do extrato do conhecimento de carga (usado como anexo do e-mail).
-
-Também confirmado: `GET /ccta-backend/api/carga/consulta/{numeroAwb}?situacao=A`
-retorna um array de cargas, cada uma com o campo `idCarga`.
+- CCT: `GET /ccta-backend/api/carga/consulta/{numeroAwb}?situacao=A` retorna
+  um array de cargas, cada uma com o campo `idCarga`; `GET
+  /ccta-backend/api/carga/{idCarga}/extrato` emite o PDF do extrato do
+  conhecimento de carga (usado como anexo do e-mail).
+- Extrato da DUIMP: **não existe endpoint de servidor que gere PDF** — o
+  botão "Gerar Extrato" na tela monta o PDF no navegador (client-side), a
+  partir dos mesmos dados da capa. Por isso o anexo de extrato da DUIMP no
+  e-mail é gerado localmente (`src/portalUnico/duimpExtratoPdf.ts`, via
+  `pdfkit`), a partir do `informacaoComplementar` — parecido no conteúdo,
+  não idêntico no layout ao PDF oficial.
 
 Também implementado: a automação só processa DUIMPs cujo
 `responsavelRegistroNumero` esteja em `PUCOMEX_CPFS_RESPONSAVEIS_AUTORIZADOS`
@@ -47,10 +50,6 @@ feito por outra pessoa, não só as que o usuário mesmo registrou.
 
 Ainda em aberto:
 
-- O anexo da DUIMP hoje vai como JSON bruto da capa
-  (`duimp-{numero}-capa.json`). O ideal é um PDF de verdade (como existe no
-  CCT) — provavelmente atrás de um botão "Gerar Extrato" na tela da DUIMP,
-  endpoint ainda não identificado.
 - Formato exato dos nomes de campo do payload real do webhook
   `dimp-registro-import` (`src/portalUnico/webhookTypes.ts`) — ainda não
   observado um evento real, só simulado manualmente.
