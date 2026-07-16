@@ -121,11 +121,10 @@ export function extrairAwbDaCapa(capa: DuimpCapa): string | null {
 
 /**
  * Busca a carga no CCT pelo número do AWB para descobrir o ID interno usado
- * nos demais endpoints (ex: emissão de extrato). Endpoint confirmado via
- * inspeção de rede real:
+ * nos demais endpoints (ex: emissão de extrato). Endpoint e payload
+ * confirmados via chamada real:
  * GET /ccta-backend/api/carga/consulta/{numeroAwb}?situacao=A
- * TODO: confirmar em que campo do JSON de resposta vem o ID interno (estamos
- * assumindo `id`/`idCarga`, ainda não visto num payload real).
+ * -> array de cargas, cada uma com o campo `idCarga`.
  */
 export async function buscarCargaPorAwb(
   numeroAwb: string,
@@ -134,7 +133,8 @@ export async function buscarCargaPorAwb(
   const { data } = await client.get(`/ccta-backend/api/carga/consulta/${numeroAwb}`, {
     params: { situacao: "A" },
   });
-  const idCarga = data?.id ?? data?.idCarga;
+  const primeiraCarga = Array.isArray(data) ? data[0] : data;
+  const idCarga = primeiraCarga?.idCarga;
   if (!idCarga) {
     throw new Error(
       `Não foi possível extrair o ID interno da carga para o AWB ${numeroAwb}. ` +
