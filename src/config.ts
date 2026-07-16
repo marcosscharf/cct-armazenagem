@@ -12,14 +12,17 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
 
   pucomex: {
-    // TODO: confirmar URL exata do endpoint de token na doc de Autenticação
-    // (https://docs.portalunico.siscomex.gov.br/api/plat/) — o par
-    // client id / client secret é gerado em "Chaves de Acesso"
-    // (https://docs.portalunico.siscomex.gov.br/pages/chaves-acesso/).
-    tokenUrl: process.env.PUCOMEX_TOKEN_URL ?? "",
+    // Base do serviço de autenticação (docs.portalunico.siscomex.gov.br/api/plat/):
+    // POST {authBaseUrl}/api/autenticar/chave-acesso
+    authBaseUrl: process.env.PUCOMEX_AUTH_BASE_URL ?? "https://portalunico.siscomex.gov.br/portal",
+    // Base dos módulos de negócio (duimp, cct, ...) — confirmado via inspeção
+    // de rede real que fica direto na raiz do domínio, sem o prefixo /portal.
     apiBaseUrl: process.env.PUCOMEX_API_BASE_URL ?? "https://portalunico.siscomex.gov.br",
     clientId: process.env.PUCOMEX_CLIENT_ID ?? "",
     clientSecret: process.env.PUCOMEX_CLIENT_SECRET ?? "",
+    // Perfil de atuação (header Role-Type) usado na autenticação — ver tabela
+    // "Perfis de Acesso" na doc de Autenticação (ex: TERCEIROS, AGECARGA...).
+    roleType: process.env.PUCOMEX_ROLE_TYPE ?? "",
 
     // Segredo combinado no momento da inscrição do webhook (chaveSecreta),
     // usado para validar que a chamada recebida realmente veio do Portal Único.

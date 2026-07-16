@@ -9,29 +9,39 @@ interface TokenCache {
 let tokenCache: TokenCache | null = null;
 
 /**
- * Troca o par client id / client secret (Chave de Acesso) por um token de
- * acesso à API do Portal Único. Endpoint e formato exatos ainda precisam ser
- * confirmados na doc de Autenticação (docs.portalunico.siscomex.gov.br/api/plat/)
- * — o fetch direto da doc está bloqueado neste ambiente, então isso não foi
- * validado contra uma chamada real ainda.
+ * Troca o par Client-Id / Client-Secret (Chave de Acesso) por um token de
+ * acesso, conforme docs.portalunico.siscomex.gov.br/api/plat/:
+ * POST {authBaseUrl}/api/autenticar/chave-acesso
+ * Headers: Client-Id, Client-Secret, Role-Type
+ * O token vem no header `Set-Token` e também no corpo `{ "token": "..." }`.
+ * A doc não especifica tempo de vida do token — cacheamos por um período
+ * curto e conservador; ajustar se descobrirmos o valor real (ex: via
+ * X-CSRF-Expiration, que é de outro token/CSRF, não deste).
  */
 async function getAccessToken(): Promise<string> {
   if (tokenCache && tokenCache.expiresAt > Date.now()) {
     return tokenCache.accessToken;
   }
 
-  const response = await axios.post(config.pucomex.tokenUrl, {
-    clientId: config.pucomex.clientId,
-    clientSecret: config.pucomex.clientSecret,
-  });
+  const response = await axios.post(
+    `${config.pucomex.authBaseUrl}/api/autenticar/chave-acesso`,
+    undefined,
+    {
+      headers: {
+        "Client-Id": config.pucomex.clientId,
+        "Client-Secret": config.pucomex.clientSecret,
+        "Role-Type": config.pucomex.roleType,
+      },
+    },
+  );
 
-  const accessToken: string = response.data.accessToken ?? response.data.access_token;
-  const expiresInSeconds: number = response.data.expiresIn ?? response.data.expires_in ?? 3600;
+  const accessToken: string = response.headers["set-token"] ?? response.data?.token;
+  if (!accessToken) {
+    throw new Error("Autenticação no Portal Único não retornou token (Set-Token/body.token)");
+  }
 
-  tokenCache = {
-    accessToken,
-    expiresAt: Date.now() + (expiresInSeconds - 60) * 1000,
-  };
+  const cacheTtlSeconds = 4 * 60; // TODO: confirmar validade real do token
+  tokenCache = { accessToken, expiresAt: Date.now() + cacheTtlSeconds * 1000 };
 
   return accessToken;
 }
@@ -40,30 +50,44 @@ async function httpClient(): Promise<AxiosInstance> {
   const token = await getAccessToken();
   return axios.create({
     baseURL: config.pucomex.apiBaseUrl,
+    // TODO: confirmar o header esperado pelos endpoints de negócio (duimp/cct)
+    // para repassar o token de sessão — assumindo Authorization: Bearer por
+    // ora; pode ser que esperem o mesmo header Set-Token/Authorization diferente.
     headers: { Authorization: `Bearer ${token}` },
   });
 }
 
 export interface DuimpExtrato {
   numeroDuimp: string;
-  versaoDuimp?: string;
+  versaoDuimp: string;
   raw: unknown;
 }
 
 /**
- * Busca o extrato/dados da DUIMP.
- * TODO: confirmar path exato do endpoint (swagger duimp-api.html).
+ * Busca os itens da DUIMP. Endpoint confirmado via inspeção de rede real:
+ * GET /duimp/api/duimp/extrato/{numeroDuimp}/{versaoDuimp}/itens?faixa-itens=1-128&cache=true
+ *
+ * TODO: confirmar se existe um endpoint separado para os dados de "capa" da
+ * DUIMP (importador, documentos de carga vinculados etc) além dos itens —
+ * este aqui traz a lista de produtos/NCM, que pode não conter o AWB.
  */
-export async function getDuimpExtrato(numeroDuimp: string): Promise<DuimpExtrato> {
+export async function getDuimpExtrato(
+  numeroDuimp: string,
+  versaoDuimp = "0001",
+): Promise<DuimpExtrato> {
   const client = await httpClient();
-  const { data } = await client.get(`/duimp/api/ext/priv/duimp/${numeroDuimp}/extrato`);
-  return { numeroDuimp, raw: data };
+  const { data } = await client.get(
+    `/duimp/api/duimp/extrato/${numeroDuimp}/${versaoDuimp}/itens`,
+    { params: { "faixa-itens": "1-128", cache: true } },
+  );
+  return { numeroDuimp, versaoDuimp, raw: data };
 }
 
 /**
  * Extrai o(s) número(s) de AWB do extrato da DUIMP.
  * TODO: confirmar em que campo do extrato o AWB aparece (documento de carga /
- * conhecimento). Por ora faz uma busca defensiva por campos prováveis.
+ * conhecimento) — o endpoint de itens pode não trazer esse dado; nesse caso
+ * será preciso um endpoint de "capa"/documentos de carga da DUIMP.
  */
 export function extrairAwbsDoExtrato(extrato: DuimpExtrato): string[] {
   const encontrados = new Set<string>();
@@ -95,7 +119,9 @@ export interface CctCarga {
 
 /**
  * Busca os dados de carga/armazenagem no CCT vinculados a um AWB.
- * TODO: confirmar path exato do endpoint (docs.portalunico.siscomex.gov.br/api/ccta ou /api/cctr).
+ * TODO: path ainda não confirmado contra uma chamada real — pegar do dev
+ * tools do navegador (aba Rede, coluna "URL Da Solicitação") ao consultar um
+ * AWB no CCT, do mesmo jeito que foi feito para a DUIMP.
  */
 export async function getCctCarga(numeroAwb: string): Promise<CctCarga> {
   const client = await httpClient();
