@@ -4,7 +4,7 @@ import { Client } from "@microsoft/microsoft-graph-client";
 import { TokenCredentialAuthenticationProvider } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
 import { config } from "../config";
 import { SendCalculoArmazenagemEmailInput } from "./types";
-import { buildSubject, buildBody } from "./message";
+import { buildSubject, buildHtmlBody } from "./message";
 
 function graphClient(): Client {
   const credential = new ClientSecretCredential(
@@ -25,7 +25,7 @@ export async function sendCalculoArmazenagemEmail(
 
   const message = {
     subject: buildSubject(input),
-    body: { contentType: "Text", content: buildBody(input) },
+    body: { contentType: "HTML", content: buildHtmlBody(input) },
     toRecipients: [{ emailAddress: { address: config.mail.toTarifacao } }],
     ccRecipients: config.mail.cc.map((address) => ({ emailAddress: { address } })),
     attachments: input.attachments.map((attachment) => ({

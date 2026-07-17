@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 import { config } from "../config";
 import { SendCalculoArmazenagemEmailInput } from "./types";
-import { buildSubject, buildBody } from "./message";
+import { buildSubject, buildBody, buildHtmlBody } from "./message";
 
 /**
  * Envio via SMTP genérico — usado para testar o fluxo localmente com uma
@@ -34,6 +34,7 @@ export async function sendCalculoArmazenagemEmail(
     cc: config.mail.cc.length > 0 ? config.mail.cc : undefined,
     subject: buildSubject(input),
     text: buildBody(input),
+    html: buildHtmlBody(input),
     attachments: input.attachments.map((attachment) => ({
       filename: attachment.filename,
       content: attachment.contentBytes,

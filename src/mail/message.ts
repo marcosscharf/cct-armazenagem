@@ -35,3 +35,24 @@ export function buildBody(input: SendCalculoArmazenagemEmailInput): string {
 
   return linhas.join("\n");
 }
+
+/**
+ * Versão HTML do corpo — usada no envio de verdade (Graph e SMTP) pra
+ * poder destacar a linha "CNPJ pagador" em negrito e amarelo, o que texto
+ * puro não permite. `buildBody` continua sendo a versão texto (log de
+ * DRY_RUN e fallback multipart no SMTP).
+ */
+export function buildHtmlBody(input: SendCalculoArmazenagemEmailInput): string {
+  const linhaCnpjPagador = input.cnpjPagador
+    ? `<p><strong style="background-color:#FFFF00;">CNPJ pagador ${formatarCnpj(input.cnpjPagador)}</strong></p>`
+    : "";
+
+  return (
+    `<p>Prezados,</p>` +
+    `<p>Solicitamos o cálculo de armazenagem referente à carga abaixo:</p>` +
+    `<p>AWB: ${input.numeroAwb}<br>DUIMP: ${formatarNumeroDuimp(input.numeroDuimp)}</p>` +
+    linhaCnpjPagador +
+    `<p>Segue em anexo o extrato da DUIMP e os dados do CCT vinculados.</p>` +
+    `<p>Solicitação gerada automaticamente.</p>`
+  );
+}
