@@ -1,5 +1,6 @@
 import {
   getDuimpCapa,
+  getDuimpItens,
   extrairAwbDaCapa,
   extrairCpfResponsavelDaCapa,
   buscarCargaPorAwb,
@@ -43,10 +44,13 @@ export async function handleDuimpRegistro(event: DuimpRegistroEvent): Promise<vo
     throw new Error(`Nenhum AWB (Conhecimento de Embarque) encontrado na DUIMP ${numeroDuimp}`);
   }
 
-  const { idCarga } = await buscarCargaPorAwb(numeroAwb);
+  const [{ idCarga }, duimpItens] = await Promise.all([
+    buscarCargaPorAwb(numeroAwb),
+    getDuimpItens(numeroDuimp, duimpCapa.versao),
+  ]);
   const [cctExtratoPdf, duimpExtratoPdf] = await Promise.all([
     getCctExtratoPdf(idCarga),
-    gerarExtratoDuimpPdf(duimpCapa),
+    gerarExtratoDuimpPdf(duimpCapa, duimpItens),
   ]);
 
   await sendCalculoArmazenagemEmail({

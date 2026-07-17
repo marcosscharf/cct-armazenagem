@@ -91,6 +91,86 @@ export async function getDuimpCapa(numeroDuimp: string): Promise<DuimpCapa> {
   return { numeroDuimp, versao: data?.versao, raw: data };
 }
 
+export interface DuimpItem {
+  numeroItem?: string;
+  codigoProduto?: string;
+  versaoProduto?: string;
+  indicadorAdquirente?: { descricao?: string };
+  ncm?: { codigo?: string; descricao?: string };
+  produto?: { descricao?: string; denominacao?: string; atributos?: AtributoDuimp[] };
+  fabricanteCodigo?: string;
+  fabricanteNome?: string;
+  fabricanteVersao?: string;
+  fabricanteEndereco?: string;
+  fabricanteTin?: string;
+  fabricantePais?: { codigo?: string; descricao?: string };
+  indicadorExportadorFabricante?: { descricao?: string };
+  indicadorCompradorVendedor?: { descricao?: string };
+  exportadorCodigo?: string;
+  exportadorNome?: string;
+  exportadorVersao?: string;
+  exportadorEndereco?: string;
+  exportadorTin?: string;
+  exportadorPais?: { codigo?: string; descricao?: string };
+  tipoAplicacao?: { descricao?: string };
+  condicao?: { descricao?: string };
+  dadosMercadoriaMedidaEstatisticaUnidade?: string;
+  dadosMercadoriaMedidaEstatisticaQuantidade?: number;
+  dadosMercadoriaPesoLiquido?: number;
+  quantidadeComercial?: number;
+  moedaNegociada?: { descricao?: string };
+  valorUnitarioMoedaNegociada?: string | number;
+  valorMercadoriaCondicaoVenda?: number;
+  descricaoMercadoria?: string | null;
+  atributos?: AtributoDuimp[];
+  tributos?: {
+    tributo?: { descricao?: string };
+    regime?: { descricao?: string };
+    fundamento?: { descricao?: string };
+    atributos?: AtributoDuimp[];
+  }[];
+}
+
+export interface AtributoDuimp {
+  nomeApresentacao?: string;
+  valor?: string | null;
+}
+
+/**
+ * Busca os itens (produtos) da DUIMP — código, NCM, fabricante, exportador,
+ * dados da mercadoria, atributos e tributos por item. Endpoint confirmado
+ * via chamada real: GET /duimp/api/duimp/extrato/{numeroDuimp}/{versaoDuimp}/itens
+ *
+ * A API valida a faixa de itens contra a quantidade real e retorna 422
+ * (`DIMP-ER0100`) se pedirmos além do último item existente — como não
+ * sabemos de antemão quantos itens a DUIMP tem, tentamos uma faixa generosa
+ * e, se cair nesse erro, extraímos o limite real da mensagem e tentamos de
+ * novo.
+ */
+export async function getDuimpItens(numeroDuimp: string, versaoDuimp: string): Promise<DuimpItem[]> {
+  const client = await httpClient();
+
+  const buscarItens = (faixaItens: string) =>
+    client.get(`/duimp/api/duimp/extrato/${numeroDuimp}/${versaoDuimp}/itens`, {
+      params: { "faixa-itens": faixaItens, cache: true },
+    });
+
+  try {
+    const { data } = await buscarItens("1-999");
+    return data;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 422) {
+      const mensagem: string = err.response.data?.message ?? "";
+      const match = /último item ativo:\s*(\d+)/i.exec(mensagem);
+      if (match) {
+        const { data } = await buscarItens(`1-${match[1]}`);
+        return data;
+      }
+    }
+    throw err;
+  }
+}
+
 interface PalavraChave {
   nomeApresentacao?: string;
   valor?: string;

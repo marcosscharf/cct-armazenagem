@@ -1,5 +1,5 @@
 import PDFDocument from "pdfkit";
-import { DuimpCapa } from "./client";
+import { DuimpCapa, DuimpItem, AtributoDuimp } from "./client";
 
 const COR_TITULO = "#1F3864";
 const COR_SUBTITULO = "#2E5395";
@@ -38,9 +38,17 @@ function formatarDataHora(epochMs?: number | null, comSegundos = false): string 
   return `${data}, ${hora}`;
 }
 
-function formatarNumero(n?: number | null, casas = 5): string {
-  if (n == null) return "";
-  return n.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
+function formatarNumero(n?: number | string | null, casas = 5): string {
+  if (n == null || n === "") return "";
+  const valor = typeof n === "string" ? Number(n) : n;
+  if (Number.isNaN(valor)) return String(n);
+  return valor.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
+}
+
+function formatarNcm(codigo?: string): string {
+  const d = (codigo ?? "").replace(/\D/g, "");
+  if (d.length !== 8) return codigo ?? "";
+  return `${d.slice(0, 4)}.${d.slice(4)}`;
 }
 
 interface Codificado {
@@ -95,14 +103,11 @@ interface CapaRaw {
 
 /**
  * Gera um PDF do extrato da DUIMP lembrando o layout oficial (que só existe
- * no navegador — client-side, sem endpoint de servidor). Cobre as seções
- * relevantes para o cálculo de armazenagem: Identificação, Carga (peso,
- * volumes, situação) e Histórico. Não reproduz as páginas de item por item
- * (NCM, fabricante, tributo por mercadoria) do PDF oficial — são dados de
- * declaração aduaneira, sem relação com armazenagem, e inflariam bastante o
- * anexo (o oficial chega a 20+ páginas só com isso).
+ * no navegador — client-side, sem endpoint de servidor): Identificação,
+ * Carga, Histórico e uma página por item (produto, fabricante, exportador,
+ * tributos), igual ao PDF oficial.
  */
-export function gerarExtratoDuimpPdf(capa: DuimpCapa): Promise<Buffer> {
+export function gerarExtratoDuimpPdf(capa: DuimpCapa, itens: DuimpItem[] = []): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 40, size: "A4", bufferPages: true });
     const chunks: Buffer[] = [];
@@ -358,6 +363,119 @@ export function gerarExtratoDuimpPdf(capa: DuimpCapa): Promise<Buffer> {
         e.infoComplementar ?? "",
       ]),
     );
+
+    // ---- Uma página por item ----
+    function atributosComoCampos(atributos?: AtributoDuimp[]): void {
+      (atributos ?? []).forEach((a) => {
+        if (!a.nomeApresentacao) return;
+        campos([{ label: a.nomeApresentacao.toUpperCase(), valor: a.valor ?? "" }]);
+      });
+    }
+
+    itens.forEach((item) => {
+      doc.addPage();
+      doc
+        .fontSize(15)
+        .font("Helvetica-Bold")
+        .text(`${tituloDoc} : Item ${item.numeroItem ?? ""}`, margemEsq);
+      doc.moveDown(0.6);
+
+      tituloSecao("Mercadoria");
+      subtituloSecao("Caracterização da Importação");
+      campos([{ label: "INDICAÇÃO DE IMPORTAÇÃO PARA TERCEIROS", valor: item.indicadorAdquirente?.descricao ?? "" }]);
+
+      subtituloSecao("Dados do Produto");
+      campos([
+        {
+          label: "CÓDIGO DO PRODUTO",
+          valor: [item.codigoProduto, item.produto?.denominacao ?? item.produto?.descricao].filter(Boolean).join(" - "),
+        },
+        { label: "VERSÃO", valor: item.versaoProduto ?? "" },
+      ]);
+      campos([{ label: "NCM", valor: [formatarNcm(item.ncm?.codigo), item.ncm?.descricao].filter(Boolean).join(" - ") }]);
+
+      subtituloSecao("Fabricante / Produtor");
+      campos([
+        { label: "PAÍS DE ORIGEM", valor: codDesc(item.fabricantePais) },
+        { label: "NÚMERO DE IDENTIFICAÇÃO (CPF/CNPJ/TIN)", valor: item.fabricanteCodigo ?? "" },
+      ]);
+      campos([
+        {
+          label: "CÓDIGO DO FABRICANTE/PRODUTOR",
+          valor: [item.fabricanteCodigo, item.fabricanteNome].filter(Boolean).join(" - "),
+        },
+        { label: "VERSÃO", valor: item.fabricanteVersao ?? "" },
+      ]);
+      campos([{ label: "ENDEREÇO", valor: item.fabricanteEndereco ?? "" }]);
+      atributosComoCampos(item.produto?.atributos);
+
+      subtituloSecao("Dados do Exportador Estrangeiro (Fornecedor)");
+      campos([
+        { label: "RELAÇÃO ENTRE EXPORTADOR E FABRICANTE/PRODUTOR", valor: item.indicadorExportadorFabricante?.descricao ?? "" },
+        { label: "VINCULAÇÃO ENTRE COMPRADOR E VENDEDOR", valor: item.indicadorCompradorVendedor?.descricao ?? "" },
+      ]);
+      campos([
+        { label: "PAÍS DE AQUISIÇÃO", valor: codDesc(item.exportadorPais) },
+        { label: "NÚMERO DE IDENTIFICAÇÃO (TIN)", valor: item.exportadorTin ?? "" },
+      ]);
+      campos([
+        {
+          label: "CÓDIGO DO EXPORTADOR ESTRANGEIRO",
+          valor: [item.exportadorCodigo, item.exportadorNome].filter(Boolean).join(" - "),
+        },
+        { label: "VERSÃO", valor: item.exportadorVersao ?? "" },
+      ]);
+      campos([{ label: "ENDEREÇO", valor: item.exportadorEndereco ?? "" }]);
+
+      subtituloSecao("Dados da Mercadoria");
+      campos([
+        { label: "APLICAÇÃO", valor: item.tipoAplicacao?.descricao ?? "" },
+        { label: "CONDIÇÃO DA MERCADORIA", valor: item.condicao?.descricao ?? "" },
+      ]);
+      campos([
+        { label: "UNIDADE ESTATÍSTICA", valor: item.dadosMercadoriaMedidaEstatisticaUnidade ?? "" },
+        { label: "QUANTIDADE NA UNIDADE ESTATÍSTICA", valor: formatarNumero(item.dadosMercadoriaMedidaEstatisticaQuantidade) },
+      ]);
+      campos([
+        { label: "PESO LÍQUIDO (KG)", valor: formatarNumero(item.dadosMercadoriaPesoLiquido) },
+        { label: "QUANTIDADE NA UNIDADE COMERCIALIZADA", valor: formatarNumero(item.quantidadeComercial) },
+      ]);
+      campos([
+        { label: "MOEDA NEGOCIADA", valor: item.moedaNegociada?.descricao ?? "" },
+        { label: "VALOR UNITÁRIO NA CONDIÇÃO DE VENDA", valor: formatarNumero(item.valorUnitarioMoedaNegociada, 7) },
+      ]);
+      campos([{ label: "VALOR TOTAL NA CONDIÇÃO DE VENDA", valor: formatarNumero(item.valorMercadoriaCondicaoVenda, 2) }]);
+
+      subtituloSecao("Informações Complementares da Mercadoria");
+      campos([{ label: "DETALHAMENTO DO PRODUTO", valor: item.descricaoMercadoria ?? "" }]);
+      campos([{ label: "DESCRIÇÃO COMPLEMENTAR DA MERCADORIA", valor: item.produto?.descricao ?? "" }]);
+      atributosComoCampos(item.atributos);
+
+      tituloSecao("Tributos");
+      subtituloSecao("Tributação");
+      tabela(
+        ["Tributo", "Regime de Tributação", "Fundamento"],
+        [larguraUtil * 0.2, larguraUtil * 0.4, larguraUtil * 0.4],
+        (item.tributos ?? []).map((t) => [
+          t.tributo?.descricao ?? "",
+          t.regime?.descricao ?? "",
+          t.fundamento?.descricao ?? "",
+        ]),
+      );
+
+      const tributosComAtributos = (item.tributos ?? []).filter((t) => (t.atributos ?? []).length > 0);
+      if (tributosComAtributos.length > 0) {
+        subtituloSecao("Atributos Adicionais");
+        tributosComAtributos.forEach((t) => {
+          const titulo = [t.tributo?.descricao, t.regime?.descricao, t.fundamento?.descricao].filter(Boolean).join(" / ");
+          espacoLivre(14);
+          doc.fontSize(9).font("Helvetica-Bold").fillColor(COR_SUBTITULO).text(titulo, margemEsq);
+          doc.fillColor("#000000");
+          doc.moveDown(0.2);
+          atributosComoCampos(t.atributos);
+        });
+      }
+    });
 
     const pageRange = doc.bufferedPageRange();
     for (let i = 0; i < pageRange.count; i++) {

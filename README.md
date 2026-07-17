@@ -7,9 +7,10 @@ cargas aéreas do RioGaleão.
 
 1. Portal Único Siscomex notifica (webhook) quando uma DUIMP é registrada
    (evento `dimp-registro-import`).
-2. Este serviço recebe a notificação, pega o número da DUIMP, busca a capa da
-   DUIMP, descobre o AWB (Conhecimento de Embarque) e busca os dados de carga
-   no CCT (via API do Portal Único, autenticando com Chave de Acesso).
+2. Este serviço recebe a notificação, pega o número da DUIMP, busca a capa e
+   os itens da DUIMP, descobre o AWB (Conhecimento de Embarque) e busca os
+   dados de carga no CCT (via API do Portal Único, autenticando com Chave de
+   Acesso).
 3. Monta e envia por e-mail a solicitação de cálculo de armazenagem para a
    tarifação do RioGaleão, com os documentos em anexo. Em produção via
    Microsoft Graph (`MAIL_PROVIDER=graph`); para testar localmente sem
@@ -36,14 +37,16 @@ Confirmado via testes reais (curl + inspeção de rede do navegador):
   um array de cargas, cada uma com o campo `idCarga`; `GET
   /ccta-backend/api/carga/{idCarga}/extrato` emite o PDF do extrato do
   conhecimento de carga (usado como anexo do e-mail).
+- Itens da DUIMP: `GET /duimp/api/duimp/extrato/{numeroDuimp}/{versaoDuimp}/itens`
+  — traz produto, NCM, fabricante, exportador e tributos por item, com o
+  mesmo retry automático de faixa de itens usado no endpoint de capa.
 - Extrato da DUIMP: **não existe endpoint de servidor que gere PDF** — o
   botão "Gerar Extrato" na tela monta o PDF no navegador (client-side), a
-  partir dos mesmos dados da capa. Por isso o anexo de extrato da DUIMP no
-  e-mail é gerado localmente (`src/portalUnico/duimpExtratoPdf.ts`, via
-  `pdfkit`), replicando o layout das seções relevantes para armazenagem
-  (Identificação, Carga, Histórico). As páginas de item por item do PDF
-  oficial (produto/NCM/fabricante/tributo) foram deixadas de fora — são
-  dados de declaração aduaneira sem relação com o cálculo de armazenagem.
+  partir dos mesmos dados da capa + itens. Por isso o anexo de extrato da
+  DUIMP no e-mail é gerado localmente (`src/portalUnico/duimpExtratoPdf.ts`,
+  via `pdfkit`), replicando o layout do PDF oficial: Identificação, Carga,
+  Histórico e uma página por item (produto, fabricante, exportador,
+  tributos).
 
 Também implementado: a automação só processa DUIMPs cujo
 `responsavelRegistroNumero` esteja em `PUCOMEX_CPFS_RESPONSAVEIS_AUTORIZADOS`
