@@ -3,6 +3,7 @@ import {
   getDuimpItens,
   extrairAwbDaCapa,
   extrairCpfResponsavelDaCapa,
+  extrairCodigoRecintoDaCapa,
   buscarCargaPorAwb,
   getCctExtratoPdf,
 } from "../portalUnico/client";
@@ -16,9 +17,10 @@ import { DuimpRegistroEvent } from "../portalUnico/webhookTypes";
  * número da DUIMP no evento, busca a capa da DUIMP, confirma que quem
  * registrou é um despachante autorizado (evita disparar para DUIMPs de
  * clientes cujo despacho é feito por outra pessoa, mas que também aparecem
- * no Portal Único), descobre o AWB, emite o extrato em PDF do CCT
- * (equivalente à tela que hoje é enviada manualmente) e envia o e-mail de
- * solicitação de cálculo de armazenagem.
+ * no Portal Único) e que o recinto aduaneiro é o RioGaleão (evita disparar
+ * para cargas de outros aeroportos), descobre o AWB, emite o extrato em PDF
+ * do CCT (equivalente à tela que hoje é enviada manualmente) e envia o
+ * e-mail de solicitação de cálculo de armazenagem.
  */
 export async function handleDuimpRegistro(event: DuimpRegistroEvent): Promise<void> {
   const numeroDuimp = event.payload.numeroDuimp;
@@ -35,6 +37,16 @@ export async function handleDuimpRegistro(event: DuimpRegistroEvent): Promise<vo
     console.log(
       `DUIMP ${numeroDuimp} ignorada: responsável pelo registro (${cpfResponsavel ?? "desconhecido"}) ` +
         `não está na lista de despachantes autorizados.`,
+    );
+    return;
+  }
+
+  const codigoRecinto = extrairCodigoRecintoDaCapa(duimpCapa);
+  const { codigosRecintoAutorizados } = config.pucomex;
+  if (codigosRecintoAutorizados.length > 0 && !codigosRecintoAutorizados.includes(codigoRecinto ?? "")) {
+    console.log(
+      `DUIMP ${numeroDuimp} ignorada: recinto aduaneiro (${codigoRecinto ?? "desconhecido"}) ` +
+        `não está na lista de recintos autorizados.`,
     );
     return;
   }

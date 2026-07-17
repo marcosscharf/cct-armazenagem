@@ -210,6 +210,18 @@ export function extrairCpfResponsavelDaCapa(capa: DuimpCapa): string | null {
 }
 
 /**
+ * Extrai o código do recinto aduaneiro (URF de despacho) da capa da DUIMP,
+ * a partir do campo `urfDespacho.codigo` (ex: "0717700" -> "AEROPORTO
+ * INTERNACIONAL GALEÃO"). É esse código que identifica em qual
+ * aeroporto/recinto a carga está sendo desembaraçada.
+ */
+export function extrairCodigoRecintoDaCapa(capa: DuimpCapa): string | null {
+  const raw = capa.raw as { urfDespacho?: { codigo?: string } } | undefined;
+  const codigo = raw?.urfDespacho?.codigo?.trim();
+  return codigo || null;
+}
+
+/**
  * Busca a carga no CCT pelo número do AWB para descobrir o ID interno usado
  * nos demais endpoints (ex: emissão de extrato). Endpoint e payload
  * confirmados via chamada real:

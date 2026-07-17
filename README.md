@@ -53,6 +53,14 @@ Também implementado: a automação só processa DUIMPs cujo
 — necessário porque o Portal Único mostra DUIMPs de clientes cujo despacho é
 feito por outra pessoa, não só as que o usuário mesmo registrou.
 
+Também implementado: a automação só processa DUIMPs cujo recinto aduaneiro
+(campo `urfDespacho.codigo` da capa) esteja em
+`PUCOMEX_CODIGOS_RECINTO_AUTORIZADOS` — o e-mail de armazenagem é destinado
+à tarifação do RioGaleão, então não faz sentido disparar para cargas
+desembaraçadas em outros aeroportos/recintos que também aparecem no Portal
+Único do usuário. Código do RioGaleão confirmado: `0717700` (AEROPORTO
+INTERNACIONAL GALEÃO).
+
 Ainda em aberto:
 
 - Formato exato dos nomes de campo do payload real do webhook

@@ -46,6 +46,18 @@ export const config = {
       .split(",")
       .map((cpf) => cpf.replace(/\D/g, ""))
       .filter(Boolean),
+
+    // Códigos de recinto/URF de despacho (campo `urfDespacho.codigo` na capa
+    // da DUIMP) para os quais a automação deve disparar — comparado com o
+    // recinto aduaneiro da DUIMP. O e-mail de armazenagem só faz sentido
+    // para cargas no terminal do RioGaleão (código "0717700"); sem esse
+    // filtro, DUIMPs de outros aeroportos/recintos também disparariam o
+    // e-mail para a tarifação errada. Vazio = sem filtro (processa qualquer
+    // recinto).
+    codigosRecintoAutorizados: (process.env.PUCOMEX_CODIGOS_RECINTO_AUTORIZADOS ?? "")
+      .split(",")
+      .map((codigo) => codigo.trim())
+      .filter(Boolean),
   },
 
   graph: {
