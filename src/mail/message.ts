@@ -30,6 +30,10 @@ export function buildBody(input: SendCalculoArmazenagemEmailInput): string {
     "",
     "Segue em anexo o extrato da DUIMP e os dados do CCT vinculados.",
     "",
+    "Grupo Nicomex",
+    "Tel: (21) 3184-6100",
+    "E-mail: dad@nicomex.com.br",
+    "",
     "Solicitação gerada automaticamente.",
   );
 
@@ -53,6 +57,7 @@ export function buildHtmlBody(input: SendCalculoArmazenagemEmailInput): string {
     `<p>AWB: ${input.numeroAwb}<br>DUIMP: ${formatarNumeroDuimp(input.numeroDuimp)}</p>` +
     linhaCnpjPagador +
     `<p>Segue em anexo o extrato da DUIMP e os dados do CCT vinculados.</p>` +
+    `<p>Grupo Nicomex<br>Tel: (21) 3184-6100<br>E-mail: dad@nicomex.com.br</p>` +
     `<p>Solicitação gerada automaticamente.</p>`
   );
 }
