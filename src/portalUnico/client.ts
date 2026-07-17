@@ -242,17 +242,19 @@ export function extrairCnpjImportadorDaCapa(capa: DuimpCapa): string | null {
 }
 
 /**
- * Extrai a referência interna do processo (Nicomex) a partir da linha
- * "REFERENCIA.......: A26-NXT-016599" dentro do texto de
+ * Extrai a referência interna do processo (Nicomex) do texto de
  * `informacaoComplementar` da capa da DUIMP. Não existe campo estruturado
  * pra isso no Portal Único — é texto livre preenchido pelo despachante ao
- * registrar a DUIMP, mas segue sempre esse padrão de rótulo.
+ * registrar a DUIMP. Em vez de depender do rótulo "REFERENCIA......:" (que
+ * pode variar), casa direto com o padrão fixo da referência:
+ * "A" + ano (2 dígitos) + "-" + sigla do cliente (3 letras) + "-" +
+ * filial+sequencial (6 dígitos), ex: "A26-NXT-016599".
  */
 export function extrairReferenciaNicomexDaCapa(capa: DuimpCapa): string | null {
   const raw = capa.raw as { informacaoComplementar?: string } | undefined;
   const texto = raw?.informacaoComplementar ?? "";
-  const match = /REFERENCIA\.*\s*:\s*(\S+)/i.exec(texto);
-  return match?.[1] ?? null;
+  const match = /\bA\d{2}-[A-Z]{3}-\d{6}\b/.exec(texto);
+  return match?.[0] ?? null;
 }
 
 /**
