@@ -7,7 +7,7 @@ import { formatarCnpj, formatarNumeroDuimp } from "../portalUnico/format";
  */
 export function buildSubject(input: SendCalculoArmazenagemEmailInput): string {
   const numero = formatarNumeroDuimp(input.numeroDuimp);
-  const cliente = input.nomeImportador ?? "";
+  const cliente = input.nomeImportador?.trim().split(/\s+/)[0] ?? "";
   const referencia = input.referenciaNicomex ? ` (${input.referenciaNicomex})` : " (REF NÃO ENCONTRADA)";
   return `DUIMP ${numero} // ${cliente}${referencia} // SOLICITAÇÃO DE CÁLCULO`;
 }
