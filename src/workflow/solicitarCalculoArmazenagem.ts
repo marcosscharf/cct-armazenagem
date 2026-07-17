@@ -4,6 +4,9 @@ import {
   extrairAwbDaCapa,
   extrairCpfResponsavelDaCapa,
   extrairCodigoRecintoDaCapa,
+  extrairNomeImportadorDaCapa,
+  extrairCnpjImportadorDaCapa,
+  extrairReferenciaNicomexDaCapa,
   buscarCargaPorAwb,
   getCctExtratoPdf,
 } from "../portalUnico/client";
@@ -65,9 +68,15 @@ export async function handleDuimpRegistro(event: DuimpRegistroEvent): Promise<vo
     gerarExtratoDuimpPdf(duimpCapa, duimpItens),
   ]);
 
+  const cnpjImportador = extrairCnpjImportadorDaCapa(duimpCapa);
+  const cnpjPagador = cnpjImportador ? config.pucomex.cnpjPagadorOverrides[cnpjImportador] ?? null : null;
+
   await sendCalculoArmazenagemEmail({
     numeroDuimp,
     numeroAwb,
+    nomeImportador: extrairNomeImportadorDaCapa(duimpCapa),
+    referenciaNicomex: extrairReferenciaNicomexDaCapa(duimpCapa),
+    cnpjPagador,
     attachments: [
       {
         filename: `duimp-${numeroDuimp}-extrato.pdf`,

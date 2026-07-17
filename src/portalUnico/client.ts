@@ -222,6 +222,40 @@ export function extrairCodigoRecintoDaCapa(capa: DuimpCapa): string | null {
 }
 
 /**
+ * Extrai o nome do importador a partir de `identificacao.cpfCnpj.descricao`
+ * na capa da DUIMP.
+ */
+export function extrairNomeImportadorDaCapa(capa: DuimpCapa): string | null {
+  const raw = capa.raw as { identificacao?: { cpfCnpj?: { descricao?: string } } } | undefined;
+  const nome = raw?.identificacao?.cpfCnpj?.descricao?.trim();
+  return nome || null;
+}
+
+/**
+ * Extrai o CNPJ (só dígitos) do importador a partir de
+ * `identificacao.cpfCnpj.codigo` na capa da DUIMP.
+ */
+export function extrairCnpjImportadorDaCapa(capa: DuimpCapa): string | null {
+  const raw = capa.raw as { identificacao?: { cpfCnpj?: { codigo?: string } } } | undefined;
+  const cnpj = raw?.identificacao?.cpfCnpj?.codigo?.replace(/\D/g, "");
+  return cnpj || null;
+}
+
+/**
+ * Extrai a referência interna do processo (Nicomex) a partir da linha
+ * "REFERENCIA.......: A26-NXT-016599" dentro do texto de
+ * `informacaoComplementar` da capa da DUIMP. Não existe campo estruturado
+ * pra isso no Portal Único — é texto livre preenchido pelo despachante ao
+ * registrar a DUIMP, mas segue sempre esse padrão de rótulo.
+ */
+export function extrairReferenciaNicomexDaCapa(capa: DuimpCapa): string | null {
+  const raw = capa.raw as { informacaoComplementar?: string } | undefined;
+  const texto = raw?.informacaoComplementar ?? "";
+  const match = /REFERENCIA\.*\s*:\s*(\S+)/i.exec(texto);
+  return match?.[1] ?? null;
+}
+
+/**
  * Busca a carga no CCT pelo número do AWB para descobrir o ID interno usado
  * nos demais endpoints (ex: emissão de extrato). Endpoint e payload
  * confirmados via chamada real:

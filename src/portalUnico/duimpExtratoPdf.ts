@@ -1,23 +1,11 @@
 import PDFDocument from "pdfkit";
 import { DuimpCapa, DuimpItem, AtributoDuimp } from "./client";
+import { formatarCnpj, formatarNumeroDuimp } from "./format";
 
 const COR_TITULO = "#1F3864";
 const COR_SUBTITULO = "#2E5395";
 const COR_TABELA_HEADER = "#1F3864";
 const COR_ZEBRA = "#F2F2F2";
-
-function formatarCnpj(digitos?: string): string {
-  const d = (digitos ?? "").replace(/\D/g, "");
-  if (d.length !== 14) return digitos ?? "";
-  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12, 14)}`;
-}
-
-function formatarNumeroDuimp(numeroDuimp: string): string {
-  const prefixo = numeroDuimp.slice(0, 4);
-  const resto = numeroDuimp.slice(4);
-  if (resto.length < 2) return numeroDuimp;
-  return `${prefixo}${resto.slice(0, -1)}-${resto.slice(-1)}`;
-}
 
 function formatarDataHora(epochMs?: number | null, comSegundos = false): string {
   if (!epochMs) return "";

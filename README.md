@@ -61,6 +61,19 @@ desembaraçadas em outros aeroportos/recintos que também aparecem no Portal
 Único do usuário. Código do RioGaleão confirmado: `0717700` (AEROPORTO
 INTERNACIONAL GALEÃO).
 
+Formato do assunto do e-mail ajustado ao padrão exigido pelo terminal do
+RioGaleão: `DUIMP {número} // {nome do importador} ({referência Nicomex}) //
+SOLICITAÇÃO DE CÁLCULO` (ex: `DUIMP 25BR0000177129-0 // PERENCO
+(A25-PER-014970) // SOLICITAÇÃO DE CÁLCULO`). A referência interna Nicomex
+não é um campo estruturado no Portal Único — é extraída da linha
+`REFERENCIA.......: A26-NXT-016599` que o despachante inclui no texto de
+`informacaoComplementar` ao registrar a DUIMP.
+
+Também implementado: para clientes cuja fatura de armazenagem deve sair
+contra um CNPJ diferente do CNPJ do importador na DUIMP (ex: PERENCO), o
+corpo do e-mail inclui a linha "CNPJ pagador {cnpj}" — mapeamento
+configurável em `PUCOMEX_CNPJ_PAGADOR_OVERRIDES`.
+
 Ainda em aberto:
 
 - Formato exato dos nomes de campo do payload real do webhook

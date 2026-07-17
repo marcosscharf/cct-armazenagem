@@ -8,6 +8,25 @@ function required(name: string): string {
   return value;
 }
 
+// Formato: "CNPJ_do_cliente:CNPJ_pagador;CNPJ_do_cliente2:CNPJ_pagador2".
+// Alguns clientes pedem que a fatura de armazenagem saia contra um CNPJ
+// diferente do CNPJ do importador na DUIMP (ex: outra filial do grupo).
+function parseCnpjPagadorOverrides(raw: string | undefined): Record<string, string> {
+  const pares = (raw ?? "")
+    .split(";")
+    .map((par) => par.trim())
+    .filter(Boolean);
+
+  const mapa: Record<string, string> = {};
+  for (const par of pares) {
+    const [origem, pagador] = par.split(":").map((valor) => (valor ?? "").replace(/\D/g, ""));
+    if (origem && pagador) {
+      mapa[origem] = pagador;
+    }
+  }
+  return mapa;
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
 
@@ -58,6 +77,13 @@ export const config = {
       .split(",")
       .map((codigo) => codigo.trim())
       .filter(Boolean),
+
+    // Casos em que a fatura de armazenagem deve sair contra um CNPJ
+    // diferente do CNPJ do importador na DUIMP (ex: cliente PERENCO — CNPJ
+    // do importador 09.309.027/0003-05, mas quem deve ser cobrado é o CNPJ
+    // 09.309.027/0004-88). Chave e valor só dígitos. Vazio = nenhum
+    // cliente com CNPJ pagador diferente.
+    cnpjPagadorOverrides: parseCnpjPagadorOverrides(process.env.PUCOMEX_CNPJ_PAGADOR_OVERRIDES),
   },
 
   graph: {

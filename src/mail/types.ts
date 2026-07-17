@@ -7,5 +7,8 @@ export interface EmailAttachment {
 export interface SendCalculoArmazenagemEmailInput {
   numeroDuimp: string;
   numeroAwb: string;
+  nomeImportador: string | null;
+  referenciaNicomex: string | null;
+  cnpjPagador: string | null;
   attachments: EmailAttachment[];
 }
