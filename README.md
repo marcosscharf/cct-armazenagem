@@ -74,15 +74,22 @@ contra um CNPJ diferente do CNPJ do importador na DUIMP (ex: PERENCO), o
 corpo do e-mail inclui a linha "CNPJ pagador {cnpj}" — mapeamento
 configurável em `PUCOMEX_CNPJ_PAGADOR_OVERRIDES`.
 
+Também confirmado direto na tela "Inclusão de Assinatura de Eventos" do
+Portal Único (Sistema: Declaração Única de Importação → Evento:
+`dimp-registro-import`, descrição "Resultado da solicitação de registro de
+uma Duimp"): o formulário de inscrição tem os campos "Endereço webhook",
+"Chave secreta" e "Chave de autenticação". Pelos tooltips desses dois
+últimos campos, a "Chave secreta" configurada na inscrição é enviada de
+volta no header `Secret` de cada chamada de notificação (é o que o
+`webhookRouter.ts` valida); a "Chave de autenticação" é opcional, pensada
+pra mecanismos padrão tipo HTTP Basic Authentication, enviada no header
+`Authorization` — não usada por enquanto.
+
 Ainda em aberto:
 
 - Formato exato dos nomes de campo do payload real do webhook
   `dimp-registro-import` (`src/portalUnico/webhookTypes.ts`) — ainda não
   observado um evento real, só simulado manualmente.
-- Mecanismo real de validação da chamada de webhook recebida (a doc
-  descreve `chaveSecreta`/`chaveAutenticacao` definidos na inscrição —
-  hoje o código espera um header simples `x-pucomex-secret` como
-  placeholder).
 
 **Nota**: o ambiente onde este projeto é desenvolvido bloqueia acesso de
 rede a `portalunico.siscomex.gov.br` — os testes acima foram feitos rodando
@@ -158,7 +165,7 @@ inscrição e as variáveis de ambiente.
 ```bash
 curl -X POST http://localhost:3000/webhooks/portal-unico \
   -H "Content-Type: application/json" \
-  -H "x-pucomex-secret: $PUCOMEX_WEBHOOK_SECRET" \
+  -H "Secret: $PUCOMEX_WEBHOOK_SECRET" \
   -d '{
     "evento": "dimp-registro-import",
     "payload": {

@@ -43,8 +43,9 @@ export const config = {
     // "Perfis de Acesso" na doc de Autenticação (ex: TERCEIROS, AGECARGA...).
     roleType: process.env.PUCOMEX_ROLE_TYPE ?? "",
 
-    // Segredo combinado no momento da inscrição do webhook (chaveSecreta),
-    // usado para validar que a chamada recebida realmente veio do Portal Único.
+    // "Chave secreta" preenchida no momento da inscrição do webhook — o
+    // Portal Único a envia de volta no header `Secret` de cada chamada de
+    // notificação, usada aqui para validar que a chamada é legítima.
     webhookSecret: process.env.PUCOMEX_WEBHOOK_SECRET ?? "",
 
     // Identificadores dos eventos de interesse. O gatilho é

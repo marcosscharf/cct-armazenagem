@@ -7,12 +7,12 @@ export const webhookRouter = Router();
 
 /**
  * Endpoint que o Portal Único chama quando um evento inscrito acontece.
- * TODO: confirmar mecanismo real de autenticação da chamada recebida
- * (chaveSecreta/chaveAutenticacao definidas na inscrição) e trocar essa
- * checagem simplificada por header pela forma correta assim que confirmado.
+ * Autenticação confirmada na própria tela de inscrição do webhook (tooltip
+ * do campo "Chave secreta"): a chave configurada na inscrição é enviada no
+ * header `Secret` da requisição POST de notificação.
  */
 webhookRouter.post("/webhooks/portal-unico", async (req, res) => {
-  const receivedSecret = req.header("x-pucomex-secret");
+  const receivedSecret = req.header("Secret");
   if (!config.pucomex.webhookSecret || receivedSecret !== config.pucomex.webhookSecret) {
     res.status(401).json({ error: "assinatura inválida" });
     return;
