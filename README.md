@@ -90,6 +90,20 @@ Ainda em aberto:
 - Formato exato dos nomes de campo do payload real do webhook
   `dimp-registro-import` (`src/portalUnico/webhookTypes.ts`) — ainda não
   observado um evento real, só simulado manualmente.
+- **Plano B de gatilho**: existe também o evento `ccti-vinc-docto-saida`
+  (Sistema: Controle de Carga e Trânsito, "Vinculação de documento de
+  saída"), que dispara imediatamente quando a DUIMP é registrada e
+  vinculada à carga (confirmado pelo usuário, com exemplo real de payload
+  mostrando `Tipo do documento de saída: DUIMP`, `Número do documento de
+  saída`, `Identificação da carga`, `CNPJ do responsável pelo envio do
+  arquivo HAWB`). Semanticamente é até mais preciso que
+  `dimp-registro-import` pro nosso caso (representa "registrada E
+  vinculada ao AWB", não só "registrada"). Decisão: testar primeiro com
+  `dimp-registro-import` (já implementado); se na prática ele não disparar
+  ou disparar cedo demais (antes da vinculação à carga existir), trocar
+  para `ccti-vinc-docto-saida`, filtrando por `Tipo do documento de saída
+  === "DUIMP"` (ignorando os casos de DI clássica, que não são mais
+  trabalhados nessa automação).
 
 **Nota**: o ambiente onde este projeto é desenvolvido bloqueia acesso de
 rede a `portalunico.siscomex.gov.br` — os testes acima foram feitos rodando
