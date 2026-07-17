@@ -7,40 +7,48 @@ export const webhookRouter = Router();
 
 /**
  * Endpoint que o Portal Único chama quando um evento inscrito acontece.
- * Autenticação confirmada na própria tela de inscrição do webhook (tooltip
- * do campo "Chave secreta"): a chave configurada na inscrição é enviada no
- * header `Secret` da requisição POST de notificação.
+ *
+ * Autenticação: header `Secret` (confirmado na doc oficial de Notificação
+ * de eventos push — é a "Chave secreta" preenchida na inscrição).
+ *
+ * Identificação do evento: header `event-type` — o campo `evento` no
+ * corpo é só uma descrição textual do que aconteceu (ex: ["Solicitação de
+ * Registro"]), não o identificador técnico da subscrição (ex:
+ * "dimp-registro-import").
+ *
+ * Timeout: a doc oficial define um limite de 3500ms para o processamento
+ * da requisição, considerando erro acima disso. Nosso processamento real
+ * (buscar capa/itens da DUIMP, buscar carga no CCT, gerar dois PDFs,
+ * enviar e-mail) é bem mais lento que isso — por isso a resposta é
+ * enviada imediatamente após validar a chamada, e o processamento roda em
+ * segundo plano (fire-and-forget), com erros só logados no servidor.
  */
-webhookRouter.post("/webhooks/portal-unico", async (req, res) => {
+webhookRouter.post("/webhooks/portal-unico", (req, res) => {
   const receivedSecret = req.header("Secret");
   if (!config.pucomex.webhookSecret || receivedSecret !== config.pucomex.webhookSecret) {
     res.status(401).json({ error: "assinatura inválida" });
     return;
   }
 
+  const eventType = req.header("event-type");
   const body = req.body;
 
-  if (!isDuimpRegistroEvent(body)) {
-    // Evento não reconhecido: responde 200 para não gerar retentativas do
-    // Portal Único, mas não processa.
-    res.status(200).json({ status: "ignorado", motivo: "formato não reconhecido" });
-    return;
-  }
+  res.status(200).json({ status: "recebido" });
 
   if (
     config.pucomex.watchedEventIds.length > 0 &&
-    !config.pucomex.watchedEventIds.includes(body.evento)
+    (!eventType || !config.pucomex.watchedEventIds.includes(eventType))
   ) {
-    res.status(200).json({ status: "ignorado", motivo: "evento fora da lista monitorada" });
+    console.log(`Evento ignorado: event-type "${eventType ?? "(ausente)"}" fora da lista monitorada.`);
     return;
   }
 
-  try {
-    await handleDuimpRegistro(body);
-    res.status(200).json({ status: "processado" });
-  } catch (err) {
-    console.error("Falha ao processar evento de registro de DUIMP", err);
-    // 500 faz o Portal Único reenviar (até 3 tentativas, uma a cada 5min).
-    res.status(500).json({ status: "erro" });
+  if (!isDuimpRegistroEvent(body)) {
+    console.warn("Evento com formato não reconhecido, ignorado:", JSON.stringify(body));
+    return;
   }
+
+  handleDuimpRegistro(body).catch((err) => {
+    console.error("Falha ao processar evento de registro de DUIMP", err);
+  });
 });

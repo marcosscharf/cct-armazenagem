@@ -26,11 +26,7 @@ import { DuimpRegistroEvent } from "../portalUnico/webhookTypes";
  * e-mail de solicitação de cálculo de armazenagem.
  */
 export async function handleDuimpRegistro(event: DuimpRegistroEvent): Promise<void> {
-  const numeroDuimp = event.payload.numeroDuimp;
-
-  if (!numeroDuimp) {
-    throw new Error(`Evento sem numeroDuimp: ${JSON.stringify(event.payload)}`);
-  }
+  const numeroDuimp = event.identificacao.numero;
 
   const duimpCapa = await getDuimpCapa(numeroDuimp);
 

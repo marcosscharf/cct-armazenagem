@@ -85,11 +85,38 @@ volta no header `Secret` de cada chamada de notificação (é o que o
 pra mecanismos padrão tipo HTTP Basic Authentication, enviada no header
 `Authorization` — não usada por enquanto.
 
+Confirmado na documentação oficial (páginas "Notificação de eventos push" e
+"Duimp - Eventos de interesse dos intervenientes privados"):
+
+- **Infraestrutura**: o endpoint receptor precisa aceitar HTTPS na porta
+  443/tcp, TLS mínimo 1.2. As chamadas chegam só a partir dos IPs
+  `161.148.0.0/16`, `189.9.0.0/16` e `200.198.192.0/18` — dá pra restringir
+  o Security Group a essas faixas em vez de `0.0.0.0/0`, se quiser reforçar
+  a segurança (não é obrigatório, já que o header `Secret` já protege o
+  endpoint).
+- **Timeout de 3500ms**: acima disso o Portal Único considera erro de
+  envio. Por isso `webhookRouter.ts` responde 200 imediatamente após
+  validar a chamada (`Secret` + `event-type`), e todo o processamento
+  pesado (chamadas de API, geração de PDF, envio de e-mail) roda em
+  segundo plano — não dá mais pra usar o status HTTP de resposta pra
+  sinalizar falha de processamento pro Portal Único, então erros nessa
+  etapa só ficam logados no servidor (não há reenvio automático nesse
+  caso).
+- **Identificador do evento**: vem no header `event-type` da requisição,
+  não no corpo — o campo `evento` no corpo é só uma descrição textual (ex:
+  `["Solicitação de Registro"]`), não o id técnico da subscrição.
+- **Formato real do payload** do evento `dimp-registro-import` (sem
+  wrapper, campos direto na raiz): `identificacao.numero` (número da
+  DUIMP, usado como gatilho), `identificacao.versao`, `niImportador`,
+  `situacaoDuimp`, `registroIniciado`, `code`, `message`, `dataEvento`,
+  `diagnostico`, `linkConsulta`. Corrigido em `webhookTypes.ts` e
+  `solicitarCalculoArmazenagem.ts` (antes assumia um wrapper `payload` e
+  campo `numeroDuimp`, que não existem no formato real).
+- Assinaturas são excluídas automaticamente após 30 dias só com falha na
+  entrega (consultável com `exibirInativos=true`).
+
 Ainda em aberto:
 
-- Formato exato dos nomes de campo do payload real do webhook
-  `dimp-registro-import` (`src/portalUnico/webhookTypes.ts`) — ainda não
-  observado um evento real, só simulado manualmente.
 - **Plano B de gatilho**: existe também o evento `ccti-vinc-docto-saida`
   (Sistema: Controle de Carga e Trânsito, "Vinculação de documento de
   saída"), que dispara imediatamente quando a DUIMP é registrada e
@@ -180,11 +207,19 @@ inscrição e as variáveis de ambiente.
 curl -X POST http://localhost:3000/webhooks/portal-unico \
   -H "Content-Type: application/json" \
   -H "Secret: $PUCOMEX_WEBHOOK_SECRET" \
+  -H "event-type: dimp-registro-import" \
   -d '{
-    "evento": "dimp-registro-import",
-    "payload": {
-      "numeroDuimp": "26BR00011742683"
-    }
+    "registroIniciado": true,
+    "code": "DIMP-INXXXX",
+    "message": "A solicitação de registro de sua Duimp sem alertas e erros foi concluída.",
+    "identificacao": {
+      "numero": "26BR00011742683",
+      "versao": "1"
+    },
+    "niImportador": "00000000000191",
+    "situacaoDuimp": "REGISTRADA_AGUARDANDO_DESEMBARACO",
+    "evento": ["Solicitação de Registro"],
+    "dataEvento": "2026-07-17T14:50:29-0300"
   }'
 ```
 
