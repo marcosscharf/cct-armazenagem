@@ -61,21 +61,53 @@ function coletarStrings(valor: unknown, acumulador: string[] = []): string[] {
 }
 
 /**
+ * Payload real do evento `ccti-vinc-docto-saida`, confirmado em eventos
+ * recebidos em produção:
+ *
+ * {
+ *   "tipoDocumentoSaida": "DUIMP",
+ *   "numeroDocumentoSaida": "26BR0001344756-5",
+ *   "identificacaoCarga": "4001908000",
+ *   "dataEmissaoCarga": "09/07/2026 14:58 (UTC +10:00)",
+ *   "cnpjResponsavelArquivoCarga": "42584342000146",
+ *   "dataHoraVinculacao": "03/08/2026 17:26:18"
+ * }
+ */
+export interface CctVinculacaoDocumentoSaidaEvent {
+  tipoDocumentoSaida?: string;
+  numeroDocumentoSaida?: string;
+  identificacaoCarga?: string;
+  dataEmissaoCarga?: string;
+  cnpjResponsavelArquivoCarga?: string;
+  dataHoraVinculacao?: string;
+}
+
+/**
  * Extrai o número da DUIMP do evento `ccti-vinc-docto-saida`.
  *
- * Os nomes exatos dos campos desse evento ainda não foram observados num
- * payload real (a Caixa de Mensagens do Portal Único mostra os dados já
- * renderizados com rótulos legíveis: "Tipo do documento de saída: DUIMP",
- * "Número do documento de saída: 26BR0001338512-8"). Por isso a busca é
- * pelo **formato** do número em vez de por um nome de campo específico —
- * número de DUIMP tem um padrão inconfundível (`26BR00013385128`) que
- * nenhum outro campo do evento reproduz.
+ * Lê os campos nomeados do payload real e ignora vinculações cujo documento
+ * de saída não seja DUIMP (DI do sistema antigo está fora do escopo desta
+ * automação).
  *
- * Isso também resolve o filtro DI vs DUIMP de graça: quando o documento de
- * saída é uma DI (sistema antigo, fora do escopo desta automação), o número
- * tem só 10 dígitos e não casa com o padrão — o evento é ignorado.
+ * Como fallback, mantém a busca pelo **formato** do número varrendo o
+ * payload — número de DUIMP tem um padrão inconfundível
+ * (`26BR00013447565`) que nenhum outro campo do evento reproduz. Assim, se
+ * o Portal Único renomear campos, a automação continua funcionando.
  */
 export function extrairNumeroDuimpDeVinculacaoCarga(body: unknown): string | null {
+  const evento = (body ?? {}) as CctVinculacaoDocumentoSaidaEvent;
+
+  if (evento.tipoDocumentoSaida && evento.tipoDocumentoSaida.toUpperCase() !== "DUIMP") {
+    return null;
+  }
+
+  if (evento.numeroDocumentoSaida) {
+    const numero = normalizarNumeroDuimp(evento.numeroDocumentoSaida);
+    if (PADRAO_NUMERO_DUIMP.test(numero)) {
+      return numero;
+    }
+  }
+
   const candidato = coletarStrings(body)
     .map(normalizarNumeroDuimp)
     .find((valor) => PADRAO_NUMERO_DUIMP.test(valor));
