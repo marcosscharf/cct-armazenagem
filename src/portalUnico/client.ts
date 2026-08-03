@@ -91,6 +91,50 @@ export async function getDuimpCapa(numeroDuimp: string): Promise<DuimpCapa> {
   return { numeroDuimp, versao: data?.versao, raw: data };
 }
 
+/** 422 com `DIMP-ER0102` = "Duimp não registrada" (ainda). */
+function ehDuimpAindaNaoRegistrada(err: unknown): boolean {
+  return (
+    axios.isAxiosError(err) &&
+    err.response?.status === 422 &&
+    err.response.data?.code === "DIMP-ER0102"
+  );
+}
+
+/**
+ * Esperas entre tentativas (~9 minutos no total). O evento
+ * `ccti-vinc-docto-saida` pode chegar alguns segundos antes de a DUIMP
+ * ficar consultável — observado em produção: vinculação às 17:44:32 e
+ * consulta recusada com "Duimp não registrada" às 17:44:39.
+ */
+const ESPERAS_REGISTRO_MS = [15_000, 30_000, 60_000, 120_000, 300_000];
+
+/**
+ * Busca a capa da DUIMP, aguardando quando ela ainda não foi registrada.
+ *
+ * O processamento roda em segundo plano (a resposta ao webhook já foi
+ * enviada), então esperar aqui não afeta o Portal Único.
+ */
+export async function getDuimpCapaQuandoRegistrada(
+  numeroDuimp: string,
+  esperasMs: number[] = ESPERAS_REGISTRO_MS,
+): Promise<DuimpCapa> {
+  for (let tentativa = 0; ; tentativa += 1) {
+    try {
+      return await getDuimpCapa(numeroDuimp);
+    } catch (err) {
+      if (!ehDuimpAindaNaoRegistrada(err) || tentativa >= esperasMs.length) {
+        throw err;
+      }
+      const espera = esperasMs[tentativa];
+      console.log(
+        `DUIMP ${numeroDuimp} ainda não registrada; nova tentativa em ${espera / 1000}s ` +
+          `(${tentativa + 1}/${esperasMs.length}).`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, espera));
+    }
+  }
+}
+
 export interface DuimpItem {
   numeroItem?: string;
   codigoProduto?: string;

@@ -161,11 +161,14 @@ padrão, então vinculações de DI são ignoradas automaticamente. O
 permitir ajustar a extração com precisão quando o primeiro evento real
 chegar.
 
-Ainda em aberto:
-
-- Nomes de campo reais do payload de `ccti-vinc-docto-saida` (ver acima —
-  a extração atual não depende deles, mas vale confirmar no primeiro
-  evento real).
+**Corrida entre a vinculação da carga e o registro da DUIMP**: observado em
+produção que o evento pode chegar alguns segundos antes de a DUIMP ficar
+consultável (vinculação às 17:44:32, consulta recusada com `DIMP-ER0102 -
+Duimp não registrada` às 17:44:39; outra DUIMP no mesmo dia passou sem
+problema). Por isso `getDuimpCapaQuandoRegistrada` repete a consulta com
+esperas crescentes (15s, 30s, 1min, 2min, 5min — ~9 minutos no total) ao
+receber esse erro específico. Como o processamento roda em segundo plano,
+essa espera não afeta o Portal Único.
 
 **Nota**: o ambiente onde este projeto é desenvolvido bloqueia acesso de
 rede a `portalunico.siscomex.gov.br` — os testes acima foram feitos rodando

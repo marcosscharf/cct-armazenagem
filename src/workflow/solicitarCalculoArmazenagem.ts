@@ -1,5 +1,5 @@
 import {
-  getDuimpCapa,
+  getDuimpCapaQuandoRegistrada,
   getDuimpItens,
   extrairAwbDaCapa,
   extrairCpfResponsavelDaCapa,
@@ -25,7 +25,7 @@ import { config } from "../config";
  * e-mail de solicitação de cálculo de armazenagem.
  */
 export async function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
-  const duimpCapa = await getDuimpCapa(numeroDuimp);
+  const duimpCapa = await getDuimpCapaQuandoRegistrada(numeroDuimp);
 
   const cpfResponsavel = extrairCpfResponsavelDaCapa(duimpCapa);
   const { cpfsResponsaveisAutorizados } = config.pucomex;

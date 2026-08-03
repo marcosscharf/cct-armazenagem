@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { config } from "../config";
 import { extrairNumeroDuimpDoEvento } from "./webhookTypes";
+import { descreverErro } from "./erros";
 import { handleDuimpRegistro } from "../workflow/solicitarCalculoArmazenagem";
 
 export const webhookRouter = Router();
@@ -58,6 +59,6 @@ webhookRouter.post("/webhooks/portal-unico", (req, res) => {
   }
 
   handleDuimpRegistro(numeroDuimp).catch((err) => {
-    console.error(`Falha ao processar DUIMP ${numeroDuimp}`, err);
+    console.error(`Falha ao processar DUIMP ${numeroDuimp}: ${descreverErro(err)}`);
   });
 });
