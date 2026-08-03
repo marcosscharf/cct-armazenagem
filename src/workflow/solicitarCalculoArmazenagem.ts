@@ -63,12 +63,14 @@ export async function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
 
   const cnpjImportador = extrairCnpjImportadorDaCapa(duimpCapa);
   const cnpjPagador = cnpjImportador ? config.pucomex.cnpjPagadorOverrides[cnpjImportador] ?? null : null;
+  const nomeImportador = extrairNomeImportadorDaCapa(duimpCapa);
+  const referenciaNicomex = extrairReferenciaNicomexDaCapa(duimpCapa);
 
   await sendCalculoArmazenagemEmail({
     numeroDuimp,
     numeroAwb,
-    nomeImportador: extrairNomeImportadorDaCapa(duimpCapa),
-    referenciaNicomex: extrairReferenciaNicomexDaCapa(duimpCapa),
+    nomeImportador,
+    referenciaNicomex,
     cnpjPagador,
     attachments: [
       {
@@ -83,4 +85,11 @@ export async function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
       },
     ],
   });
+
+  console.log(
+    `DUIMP ${numeroDuimp} processada: e-mail ${config.mail.dryRun ? "SIMULADO (DRY_RUN)" : "enviado"} ` +
+      `para ${config.mail.toTarifacao} — cliente ${nomeImportador ?? "?"}, ` +
+      `ref ${referenciaNicomex ?? "não encontrada"}, AWB ${numeroAwb}` +
+      `${cnpjPagador ? `, CNPJ pagador ${cnpjPagador}` : ""}.`,
+  );
 }
