@@ -13,11 +13,10 @@ import {
 import { gerarExtratoDuimpPdf } from "../portalUnico/duimpExtratoPdf";
 import { sendCalculoArmazenagemEmail } from "../mail";
 import { config } from "../config";
-import { DuimpRegistroEvent } from "../portalUnico/webhookTypes";
 
 /**
- * Gatilho: evento `dimp-registro-import` (DUIMP registrada). A partir do
- * número da DUIMP no evento, busca a capa da DUIMP, confirma que quem
+ * A partir do número de uma DUIMP recém-registrada (extraído do evento de
+ * webhook em `webhookRouter.ts`), busca a capa da DUIMP, confirma que quem
  * registrou é um despachante autorizado (evita disparar para DUIMPs de
  * clientes cujo despacho é feito por outra pessoa, mas que também aparecem
  * no Portal Único) e que o recinto aduaneiro é o RioGaleão (evita disparar
@@ -25,9 +24,7 @@ import { DuimpRegistroEvent } from "../portalUnico/webhookTypes";
  * do CCT (equivalente à tela que hoje é enviada manualmente) e envia o
  * e-mail de solicitação de cálculo de armazenagem.
  */
-export async function handleDuimpRegistro(event: DuimpRegistroEvent): Promise<void> {
-  const numeroDuimp = event.identificacao.numero;
-
+export async function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
   const duimpCapa = await getDuimpCapa(numeroDuimp);
 
   const cpfResponsavel = extrairCpfResponsavelDaCapa(duimpCapa);

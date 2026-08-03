@@ -5,8 +5,9 @@ cargas aéreas do RioGaleão.
 
 ## Fluxo
 
-1. Portal Único Siscomex notifica (webhook) quando uma DUIMP é registrada
-   (evento `dimp-registro-import`).
+1. Portal Único Siscomex notifica (webhook) quando a carga é vinculada ao
+   documento de saída (evento `ccti-vinc-docto-saida`), o que acontece
+   imediatamente ao registrar a DUIMP.
 2. Este serviço recebe a notificação, pega o número da DUIMP, busca a capa e
    os itens da DUIMP, descobre o AWB (Conhecimento de Embarque) e busca os
    dados de carga no CCT (via API do Portal Único, autenticando com Chave de
@@ -114,23 +115,57 @@ Confirmado na documentação oficial (páginas "Notificação de eventos push" e
   campo `numeroDuimp`, que não existem no formato real).
 - Assinaturas são excluídas automaticamente após 30 dias só com falha na
   entrega (consultável com `exibirInativos=true`).
+- **API externa de gestão de webhooks** (`/portal/api/ext/webhook`): usa
+  autenticação diferente dos endpoints internos de tela. Aqui funciona
+  `Authorization: <token do header Set-Token>` + `X-CSRF-Token` — **sem** o
+  prefixo `Bearer` (com Bearer retorna `PUCX-ER0201`, "token não passou na
+  verificação de formato"). Já os módulos de negócio (`/duimp`,
+  `/ccta-backend`) usam cookie `JWTPCMX_USR` + `X-Csrf-Token`. Útil para
+  listar assinaturas e ver `dataUltimoSucesso` de cada uma.
+
+## Escolha do evento gatilho
+
+O gatilho é **`ccti-vinc-docto-saida`** ("Vinculação de documento de saída",
+Sistema: Controle de Carga e Trânsito), não `dimp-registro-import` como
+planejado inicialmente. Motivo:
+
+- Só é permitida **uma assinatura por evento** por usuário (o Portal Único
+  barra a inclusão: "Já existe uma assinatura para esse evento. Você deve
+  usar o serviço de edição").
+- O `dimp-registro-import` do usuário já tinha uma assinatura ativa desde
+  dez/2024 apontando para um endpoint de terceiros
+  (`pkd0aa0ofj.execute-api.us-east-1.amazonaws.com`). A consulta de
+  assinaturas (`GET /portal/api/ext/webhook`) mostrou `dataUltimoSucesso`
+  no mesmo dia da verificação — ou seja, integração **viva e em uso**, que
+  seria quebrada se a URL fosse repontada.
+- O `ccti-vinc-docto-saida` não tinha assinatura nenhuma, então pôde ser
+  incluído sem afetar nada existente. Semanticamente é até melhor:
+  representa "DUIMP registrada **e vinculada à carga**", não só
+  "registrada".
+
+O código suporta os dois eventos (`webhookTypes.ts`) — se um dia a
+assinatura de `dimp-registro-import` ficar livre, basta trocar
+`PUCOMEX_WATCHED_EVENT_IDS`.
+
+**Extração do número da DUIMP nesse evento**: os nomes reais dos campos do
+payload ainda não foram observados (a Caixa de Mensagens do Portal Único
+mostra os dados já renderizados: "Tipo do documento de saída: DUIMP",
+"Número do documento de saída: 26BR0001338512-8", "Identificação da carga",
+"CNPJ do responsável pelo envio do arquivo HAWB"). Por isso a extração
+procura pelo **formato** do número (`\d{2}BR\d{11}` após remover
+pontuação), varrendo o payload recursivamente, em vez de depender de um
+nome de campo. Isso é resiliente a qualquer nomenclatura e ainda resolve o
+filtro DI vs DUIMP de graça: número de DI tem 10 dígitos e não casa com o
+padrão, então vinculações de DI são ignoradas automaticamente. O
+`webhookRouter.ts` loga o payload cru de todo evento recebido, para
+permitir ajustar a extração com precisão quando o primeiro evento real
+chegar.
 
 Ainda em aberto:
 
-- **Plano B de gatilho**: existe também o evento `ccti-vinc-docto-saida`
-  (Sistema: Controle de Carga e Trânsito, "Vinculação de documento de
-  saída"), que dispara imediatamente quando a DUIMP é registrada e
-  vinculada à carga (confirmado pelo usuário, com exemplo real de payload
-  mostrando `Tipo do documento de saída: DUIMP`, `Número do documento de
-  saída`, `Identificação da carga`, `CNPJ do responsável pelo envio do
-  arquivo HAWB`). Semanticamente é até mais preciso que
-  `dimp-registro-import` pro nosso caso (representa "registrada E
-  vinculada ao AWB", não só "registrada"). Decisão: testar primeiro com
-  `dimp-registro-import` (já implementado); se na prática ele não disparar
-  ou disparar cedo demais (antes da vinculação à carga existir), trocar
-  para `ccti-vinc-docto-saida`, filtrando por `Tipo do documento de saída
-  === "DUIMP"` (ignorando os casos de DI clássica, que não são mais
-  trabalhados nessa automação).
+- Nomes de campo reais do payload de `ccti-vinc-docto-saida` (ver acima —
+  a extração atual não depende deles, mas vale confirmar no primeiro
+  evento real).
 
 **Nota**: o ambiente onde este projeto é desenvolvido bloqueia acesso de
 rede a `portalunico.siscomex.gov.br` — os testes acima foram feitos rodando
@@ -207,21 +242,18 @@ inscrição e as variáveis de ambiente.
 curl -X POST http://localhost:3000/webhooks/portal-unico \
   -H "Content-Type: application/json" \
   -H "Secret: $PUCOMEX_WEBHOOK_SECRET" \
-  -H "event-type: dimp-registro-import" \
+  -H "event-type: ccti-vinc-docto-saida" \
   -d '{
-    "registroIniciado": true,
-    "code": "DIMP-INXXXX",
-    "message": "A solicitação de registro de sua Duimp sem alertas e erros foi concluída.",
-    "identificacao": {
-      "numero": "26BR00011742683",
-      "versao": "1"
-    },
-    "niImportador": "00000000000191",
-    "situacaoDuimp": "REGISTRADA_AGUARDANDO_DESEMBARACO",
-    "evento": ["Solicitação de Registro"],
-    "dataEvento": "2026-07-17T14:50:29-0300"
+    "tipoDocumentoSaida": "DUIMP",
+    "numeroDocumentoSaida": "26BR0001174268-3",
+    "identificacaoCarga": "4685125841",
+    "dataVinculacao": "2026-08-03T15:44:08-0300"
   }'
 ```
+
+Os nomes de campo acima são um chute (o payload real ainda não foi
+observado), mas isso não impede o teste: a extração procura pelo formato do
+número da DUIMP em qualquer lugar do payload, não por nome de campo.
 
 ## Deploy
 
