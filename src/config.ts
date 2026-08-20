@@ -27,6 +27,14 @@ function parseCnpjPagadorOverrides(raw: string | undefined): Record<string, stri
   return mapa;
 }
 
+/** Lista de e-mails separados por vírgula, ignorando espaços e vazios. */
+function parseEnderecos(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((endereco) => endereco.trim())
+    .filter(Boolean);
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
 
@@ -110,11 +118,10 @@ export const config = {
     // "graph" (produção) ou "smtp" (teste local com conta pessoal).
     provider: process.env.MAIL_PROVIDER === "smtp" ? "smtp" : "graph",
     from: process.env.MAIL_FROM ?? "",
-    toTarifacao: process.env.MAIL_TO_TARIFACAO ?? "",
-    cc: (process.env.MAIL_CC ?? "")
-      .split(",")
-      .map((addr) => addr.trim())
-      .filter(Boolean),
+    // Destinatários da solicitação de cálculo — a tarifação do terminal
+    // costuma ter mais de um endereço. Vários, separados por vírgula.
+    toTarifacao: parseEnderecos(process.env.MAIL_TO_TARIFACAO),
+    cc: parseEnderecos(process.env.MAIL_CC),
     // Modo de teste: loga o e-mail que seria enviado em vez de enviar de
     // verdade. Útil para testar o fluxo Portal Único -> anexos sem enviar
     // nada ainda, nem via Graph nem via SMTP.

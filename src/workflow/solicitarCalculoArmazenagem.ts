@@ -88,7 +88,7 @@ export async function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
 
   console.log(
     `DUIMP ${numeroDuimp} processada: e-mail ${config.mail.dryRun ? "SIMULADO (DRY_RUN)" : "enviado"} ` +
-      `para ${config.mail.toTarifacao} — cliente ${nomeImportador ?? "?"}, ` +
+      `para ${config.mail.toTarifacao.join(", ")} — cliente ${nomeImportador ?? "?"}, ` +
       `ref ${referenciaNicomex ?? "não encontrada"}, AWB ${numeroAwb}` +
       `${cnpjPagador ? `, CNPJ pagador ${cnpjPagador}` : ""}.`,
   );

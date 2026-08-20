@@ -26,7 +26,7 @@ export async function sendCalculoArmazenagemEmail(
   const message = {
     subject: buildSubject(input),
     body: { contentType: "HTML", content: buildHtmlBody(input) },
-    toRecipients: [{ emailAddress: { address: config.mail.toTarifacao } }],
+    toRecipients: config.mail.toTarifacao.map((address) => ({ emailAddress: { address } })),
     ccRecipients: config.mail.cc.map((address) => ({ emailAddress: { address } })),
     attachments: input.attachments.map((attachment) => ({
       "@odata.type": "#microsoft.graph.fileAttachment",

@@ -31,6 +31,7 @@ export async function sendCalculoArmazenagemEmail(
   await transport.sendMail({
     from: config.mail.from || config.smtp.user,
     to: config.mail.toTarifacao,
+    // nodemailer aceita array em `to`/`cc` diretamente.
     cc: config.mail.cc.length > 0 ? config.mail.cc : undefined,
     subject: buildSubject(input),
     text: buildBody(input),
