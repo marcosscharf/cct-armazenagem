@@ -270,3 +270,78 @@ npm start
 Funciona como processo Node comum atrás de qualquer proxy HTTPS (nginx,
 Azure App Service, Azure Functions com um adapter, etc.) — sem dependência
 de nenhum serviço específico da nuvem.
+
+## Produção — onde roda e como mexer
+
+Em produção desde agosto/2026, processando DUIMPs reais.
+
+### Infraestrutura
+
+| | |
+|---|---|
+| Servidor | VM Windows no **Amazon Lightsail** (não aparece no console do EC2) |
+| IP | `3.219.39.52` — **estático**, confirmado com a Diversa Tecnologia |
+| Conta AWS | `595609666476`, região `us-east-1` (administrada pela Diversa) |
+| Domínio | `cct-armazenagem.nicomex.com.br` (registro A no DNS da Nicomex) |
+| Pasta | `C:\apps\cct-armazenagem` |
+
+A mesma VM hospeda o dashboard da equipe (portas 8080/8440) e um Postgres
+(5432) — aplicações independentes desta.
+
+### Serviços do Windows (via NSSM, em `C:\nssm\nssm.exe`)
+
+- **`cct-armazenagem`** — o serviço Node, escutando em `localhost:3000`.
+  Registrado com o caminho completo do `node.exe`, então funciona
+  independentemente do PATH.
+- **`caddy`** — proxy HTTPS na 443, repassa para a 3000. Obtém e renova o
+  certificado Let's Encrypt sozinho (config em `C:\caddy\Caddyfile`).
+  Precisa da porta 80 aberta para a renovação automática.
+
+Portas 80 e 443 liberadas no firewall do Lightsail e no do Windows. O
+Portal Único só chama a partir de `161.148.0.0/16`, `189.9.0.0/16` e
+`200.198.192.0/18`.
+
+### Operações comuns
+
+```powershell
+# Acompanhar em tempo real
+Get-Content C:\apps\cct-armazenagem\logs\out.log -Wait
+
+# Ver falhas (uma linha por erro)
+Get-Content C:\apps\cct-armazenagem\logs\err.log -Tail 30
+
+# Atualizar o código
+cd C:\apps\cct-armazenagem
+git pull origin main
+npm run build
+C:\nssm\nssm.exe restart cct-armazenagem
+
+# Estado dos serviços
+Get-Service cct-armazenagem, caddy
+```
+
+Depois de qualquer alteração no `.env`, é preciso reiniciar o serviço — ele
+lê a configuração só na inicialização.
+
+### Assinatura do webhook
+
+Registrada no Portal Único em Sistema **Controle de Carga e Trânsito**,
+evento **`ccti-vinc-docto-saida`**, apontando para
+`https://cct-armazenagem.nicomex.com.br/webhooks/portal-unico`. A chave
+secreta cadastrada lá tem que ser idêntica ao `PUCOMEX_WEBHOOK_SECRET` do
+`.env`.
+
+Atenção: o Portal Único **exclui a assinatura automaticamente** se, por 30
+dias corridos, só houver falha na entrega. Se o serviço ficar fora do ar
+por muito tempo, vale conferir se a assinatura continua ativa.
+
+### Envio de e-mail
+
+Microsoft Graph (`MAIL_PROVIDER=graph`), remetente `dad@nicomex.com.br`.
+O app registration no Entra ID tem permissão de aplicativo `Mail.Send`,
+restrita a essa única caixa por uma `ApplicationAccessPolicy`.
+
+> ⚠️ **O segredo do cliente expira em 20/08/2028.** Quando vencer, o envio
+> para de funcionar sem aviso prévio (as falhas aparecem no `err.log`, mas
+> nenhum e-mail é enviado avisando). É preciso gerar um novo segredo no
+> Entra ID e atualizar `GRAPH_CLIENT_SECRET` no `.env`.
