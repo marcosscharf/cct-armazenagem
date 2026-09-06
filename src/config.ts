@@ -75,18 +75,6 @@ export const config = {
       .map((cpf) => cpf.replace(/\D/g, ""))
       .filter(Boolean),
 
-    // Códigos de recinto/URF de despacho (campo `urfDespacho.codigo` na capa
-    // da DUIMP) para os quais a automação deve disparar — comparado com o
-    // recinto aduaneiro da DUIMP. O e-mail de armazenagem só faz sentido
-    // para cargas no terminal do RioGaleão (código "0717700"); sem esse
-    // filtro, DUIMPs de outros aeroportos/recintos também disparariam o
-    // e-mail para a tarifação errada. Vazio = sem filtro (processa qualquer
-    // recinto).
-    codigosRecintoAutorizados: (process.env.PUCOMEX_CODIGOS_RECINTO_AUTORIZADOS ?? "")
-      .split(",")
-      .map((codigo) => codigo.trim())
-      .filter(Boolean),
-
     // Casos em que a fatura de armazenagem deve sair contra um CNPJ
     // diferente do CNPJ do importador na DUIMP (ex: cliente PERENCO — CNPJ
     // do importador 09.309.027/0003-05, mas quem deve ser cobrado é o CNPJ
@@ -118,9 +106,19 @@ export const config = {
     // "graph" (produção) ou "smtp" (teste local com conta pessoal).
     provider: process.env.MAIL_PROVIDER === "smtp" ? "smtp" : "graph",
     from: process.env.MAIL_FROM ?? "",
-    // Destinatários da solicitação de cálculo — a tarifação do terminal
-    // costuma ter mais de um endereço. Vários, separados por vírgula.
-    toTarifacao: parseEnderecos(process.env.MAIL_TO_TARIFACAO),
+    // Destinatários por recinto (ver `src/mail/rotas.ts`, que decide para
+    // onde vai cada DUIMP conforme o aeroporto). Vários endereços por
+    // destino, separados por vírgula.
+    //
+    // MAIL_TO_TARIFACAO é o nome antigo de MAIL_TO_GALEAO, de quando havia
+    // um destino só; continua funcionando para não quebrar .env existentes.
+    toGaleao: parseEnderecos(process.env.MAIL_TO_GALEAO ?? process.env.MAIL_TO_TARIFACAO),
+
+    // Guarulhos não vai direto ao aeroporto: vai para o representante da
+    // Nicomex em São Paulo, que solicita o cálculo (DAI) ao GRU.
+    toGuarulhos: parseEnderecos(process.env.MAIL_TO_GUARULHOS),
+
+    // Cópia aplicada a todos os destinos.
     cc: parseEnderecos(process.env.MAIL_CC),
     // Modo de teste: loga o e-mail que seria enviado em vez de enviar de
     // verdade. Útil para testar o fluxo Portal Único -> anexos sem enviar

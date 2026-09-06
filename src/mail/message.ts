@@ -14,9 +14,9 @@ export function buildSubject(input: SendCalculoArmazenagemEmailInput): string {
 
 export function buildBody(input: SendCalculoArmazenagemEmailInput): string {
   const linhas = [
-    "Prezados,",
+    input.rota.saudacao,
     "",
-    "Solicitamos o cálculo de armazenagem referente à carga abaixo:",
+    input.rota.introducao,
     "",
     `AWB: ${input.numeroAwb}`,
     `DUIMP: ${formatarNumeroDuimp(input.numeroDuimp)}`,
@@ -52,8 +52,8 @@ export function buildHtmlBody(input: SendCalculoArmazenagemEmailInput): string {
     : "";
 
   return (
-    `<p>Prezados,</p>` +
-    `<p>Solicitamos o cálculo de armazenagem referente à carga abaixo:</p>` +
+    `<p>${input.rota.saudacao}</p>` +
+    `<p>${input.rota.introducao}</p>` +
     `<p>AWB: ${input.numeroAwb}<br>DUIMP: ${formatarNumeroDuimp(input.numeroDuimp)}</p>` +
     linhaCnpjPagador +
     `<p>Segue em anexo o extrato da DUIMP e os dados do CCT vinculados.</p>` +

@@ -1,7 +1,7 @@
 # cct-armazenagem
 
-Automação da solicitação de cálculo de armazenagem junto ao terminal de
-cargas aéreas do RioGaleão.
+Automação da solicitação de cálculo de armazenagem para cargas aéreas de
+importação (RioGaleão e Guarulhos).
 
 ## Fluxo
 
@@ -12,8 +12,9 @@ cargas aéreas do RioGaleão.
    os itens da DUIMP, descobre o AWB (Conhecimento de Embarque) e busca os
    dados de carga no CCT (via API do Portal Único, autenticando com Chave de
    Acesso).
-3. Monta e envia por e-mail a solicitação de cálculo de armazenagem para a
-   tarifação do RioGaleão, com os documentos em anexo. Em produção via
+3. Monta e envia por e-mail a solicitação, com os documentos em anexo, para
+   o destino correspondente ao recinto da carga (ver "Roteamento por
+   recinto" abaixo). Em produção via
    Microsoft Graph (`MAIL_PROVIDER=graph`); para testar localmente sem
    depender do app registration, dá para usar SMTP genérico
    (`MAIL_PROVIDER=smtp`, ex: Gmail com senha de app).
@@ -54,13 +55,32 @@ Também implementado: a automação só processa DUIMPs cujo
 — necessário porque o Portal Único mostra DUIMPs de clientes cujo despacho é
 feito por outra pessoa, não só as que o usuário mesmo registrou.
 
-Também implementado: a automação só processa DUIMPs cujo recinto aduaneiro
-(campo `urfDespacho.codigo` da capa) esteja em
-`PUCOMEX_CODIGOS_RECINTO_AUTORIZADOS` — o e-mail de armazenagem é destinado
-à tarifação do RioGaleão, então não faz sentido disparar para cargas
-desembaraçadas em outros aeroportos/recintos que também aparecem no Portal
-Único do usuário. Código do RioGaleão confirmado: `0717700` (AEROPORTO
-INTERNACIONAL GALEÃO).
+### Roteamento por recinto
+
+Para onde vai cada solicitação depende do recinto aduaneiro da DUIMP
+(campo `urfDespacho.codigo` da capa). A tabela fica em
+`src/mail/rotas.ts`:
+
+| Recinto | Destino | Quem recebe | Abertura do e-mail |
+|---|---|---|---|
+| `0717700` — Galeão (RJ) | `MAIL_TO_GALEAO` | tarifação do terminal, que faz o cálculo | "Prezados," / "Solicitamos o cálculo de armazenagem referente à carga abaixo:" |
+| `0817600` — Guarulhos (SP) | `MAIL_TO_GUARULHOS` | representante da Nicomex em SP, que solicita o DAI ao GRU | "Olá Marcos," / "Segue documentação para envio do DAI" |
+
+Assunto, anexos, dados da carga, linha de CNPJ pagador e assinatura são
+iguais nos dois casos — muda só a saudação, a linha de abertura e o
+destinatário.
+
+Essa tabela é também **o filtro de recinto**: DUIMP cujo recinto não esteja
+nela é ignorada (o Portal Único mostra processos de vários aeroportos, e
+antes de existir esse filtro qualquer um deles dispararia e-mail para a
+tarifação errada). Antes havia uma lista separada em
+`PUCOMEX_CODIGOS_RECINTO_AUTORIZADOS`, que precisava ser mantida em
+sincronia com os destinos — acrescentar um aeroporto num lugar e esquecer
+no outro fazia a automação parar de disparar em silêncio. Com fonte única
+isso não acontece.
+
+Para acrescentar um aeroporto: uma entrada na tabela + a variável de
+ambiente com os destinatários.
 
 Formato do assunto do e-mail ajustado ao padrão exigido pelo terminal do
 RioGaleão: `DUIMP {número} // {nome do importador} ({referência Nicomex}) //

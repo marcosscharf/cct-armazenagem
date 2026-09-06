@@ -12,6 +12,7 @@ import {
 } from "../portalUnico/client";
 import { gerarExtratoDuimpPdf } from "../portalUnico/duimpExtratoPdf";
 import { sendCalculoArmazenagemEmail } from "../mail";
+import { rotaDoRecinto } from "../mail/rotas";
 import { config } from "../config";
 
 /**
@@ -38,11 +39,11 @@ export async function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
   }
 
   const codigoRecinto = extrairCodigoRecintoDaCapa(duimpCapa);
-  const { codigosRecintoAutorizados } = config.pucomex;
-  if (codigosRecintoAutorizados.length > 0 && !codigosRecintoAutorizados.includes(codigoRecinto ?? "")) {
+  const rota = rotaDoRecinto(codigoRecinto);
+  if (!rota) {
     console.log(
       `DUIMP ${numeroDuimp} ignorada: recinto aduaneiro (${codigoRecinto ?? "desconhecido"}) ` +
-        `não está na lista de recintos autorizados.`,
+        `não tem destino configurado.`,
     );
     return;
   }
@@ -72,6 +73,7 @@ export async function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
     nomeImportador,
     referenciaNicomex,
     cnpjPagador,
+    rota,
     attachments: [
       {
         filename: `duimp-${numeroDuimp}-extrato.pdf`,
@@ -88,7 +90,7 @@ export async function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
 
   console.log(
     `DUIMP ${numeroDuimp} processada: e-mail ${config.mail.dryRun ? "SIMULADO (DRY_RUN)" : "enviado"} ` +
-      `para ${config.mail.toTarifacao.join(", ")} — cliente ${nomeImportador ?? "?"}, ` +
+      `para ${rota.nome} (${rota.para.join(", ")}) — cliente ${nomeImportador ?? "?"}, ` +
       `ref ${referenciaNicomex ?? "não encontrada"}, AWB ${numeroAwb}` +
       `${cnpjPagador ? `, CNPJ pagador ${cnpjPagador}` : ""}.`,
   );
