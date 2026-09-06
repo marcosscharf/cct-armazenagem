@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from "axios";
 import { config } from "../config";
+import { descreverErro } from "./erros";
 
 interface Session {
   jwt: string;
@@ -101,6 +102,25 @@ function ehDuimpAindaNaoRegistrada(err: unknown): boolean {
 }
 
 /**
+ * Falha momentânea do lado do Portal Único: erro 5xx (observado em
+ * produção: `500 PUCX-ER0001 - Ocorreu um erro inesperado`) ou queda de
+ * conexão, sem resposta HTTP. Não é problema do nosso pedido, então
+ * repetir tem chance real de funcionar.
+ *
+ * 4xx fica de fora de propósito: são respostas sobre o pedido em si (não
+ * existe, sem permissão, formato inválido) e repetir só atrasaria o
+ * inevitável — a única exceção é o 422 de "ainda não registrada", tratado
+ * separadamente acima.
+ */
+function ehFalhaTransitoria(err: unknown): boolean {
+  if (!axios.isAxiosError(err)) {
+    return false;
+  }
+  const status = err.response?.status;
+  return status === undefined || status >= 500;
+}
+
+/**
  * Esperas entre tentativas (~9 minutos no total). O evento
  * `ccti-vinc-docto-saida` pode chegar alguns segundos antes de a DUIMP
  * ficar consultável — observado em produção: vinculação às 17:44:32 e
@@ -109,10 +129,14 @@ function ehDuimpAindaNaoRegistrada(err: unknown): boolean {
 const ESPERAS_REGISTRO_MS = [15_000, 30_000, 60_000, 120_000, 300_000];
 
 /**
- * Busca a capa da DUIMP, aguardando quando ela ainda não foi registrada.
+ * Busca a capa da DUIMP, aguardando quando ela ainda não foi registrada ou
+ * quando o Portal Único falha momentaneamente.
  *
  * O processamento roda em segundo plano (a resposta ao webhook já foi
- * enviada), então esperar aqui não afeta o Portal Único.
+ * enviada), então esperar aqui não afeta o Portal Único. E como o Portal
+ * Único não reenvia a notificação depois que respondemos 200, desistir de
+ * uma falha transitória significa perder a solicitação de vez — daí valer
+ * insistir.
  */
 export async function getDuimpCapaQuandoRegistrada(
   numeroDuimp: string,
@@ -122,12 +146,16 @@ export async function getDuimpCapaQuandoRegistrada(
     try {
       return await getDuimpCapa(numeroDuimp);
     } catch (err) {
-      if (!ehDuimpAindaNaoRegistrada(err) || tentativa >= esperasMs.length) {
+      const naoRegistrada = ehDuimpAindaNaoRegistrada(err);
+      if ((!naoRegistrada && !ehFalhaTransitoria(err)) || tentativa >= esperasMs.length) {
         throw err;
       }
       const espera = esperasMs[tentativa];
+      const motivo = naoRegistrada
+        ? "ainda não registrada"
+        : `falha momentânea do Portal Único (${descreverErro(err)})`;
       console.log(
-        `DUIMP ${numeroDuimp} ainda não registrada; nova tentativa em ${espera / 1000}s ` +
+        `DUIMP ${numeroDuimp} ${motivo}; nova tentativa em ${espera / 1000}s ` +
           `(${tentativa + 1}/${esperasMs.length}).`,
       );
       await new Promise((resolve) => setTimeout(resolve, espera));
