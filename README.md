@@ -82,6 +82,40 @@ isso não acontece.
 Para acrescentar um aeroporto: uma entrada na tabela + a variável de
 ambiente com os destinatários.
 
+### Envio duplicado
+
+O Portal Único dispara um evento de vinculação **a cada tentativa de
+registro** da DUIMP. Quando o registro falha e é repetido, a carga é
+vinculada e desvinculada várias vezes em poucos minutos. Observado em
+produção no histórico de uma DUIMP:
+
+```
+12:43  Carga Vinculada / Carga Desvinculada
+12:45  Carga Vinculada / Carga Desvinculada
+12:46  Carga Vinculada / Carga Desvinculada
+12:53  Declaração registrada   <- registro efetivo
+12:53  Carga Vinculada
+```
+
+Como cada evento insiste por ~9 minutos esperando a DUIMP ficar
+consultável, três deles alcançaram as 12:53 e **enviaram três e-mails
+idênticos** para o RioGaleão.
+
+Duas peças resolvem isso:
+
+- `duimpsEnviadas.ts` guarda em arquivo (`dados/duimps-enviadas.txt`) as
+  DUIMPs já enviadas, e bloqueia novo envio dentro de uma janela de 6 horas
+  (`DUIMPS_ENVIADAS_JANELA_HORAS`). Em arquivo, e não só em memória, para
+  sobreviver a um deploy no meio da janela.
+- Uma **fila por DUIMP** em `solicitarCalculoArmazenagem.ts`, que processa
+  eventos da mesma DUIMP em sequência. Sem ela a checagem não adiantaria:
+  os quatro eventos esperariam o registro simultaneamente, todos veriam
+  "ainda não enviada" e todos mandariam e-mail.
+
+A janela não é "para sempre" de propósito — uma retificação posterior pode
+religar a carga, e aí um novo pedido faz sentido. Entre os dois erros
+possíveis, deixar de enviar é pior que enviar duas vezes.
+
 Formato do assunto do e-mail ajustado ao padrão exigido pelo terminal do
 RioGaleão: `DUIMP {número} // {nome do importador} ({referência Nicomex}) //
 SOLICITAÇÃO DE CÁLCULO` (ex: `DUIMP 25BR0000177129-0 // PERENCO

@@ -13,19 +13,59 @@ import {
 import { gerarExtratoDuimpPdf } from "../portalUnico/duimpExtratoPdf";
 import { sendCalculoArmazenagemEmail } from "../mail";
 import { rotaDoRecinto } from "../mail/rotas";
+import { envioRecente, registrarEnvio } from "./duimpsEnviadas";
 import { config } from "../config";
 
 /**
- * A partir do número de uma DUIMP recém-registrada (extraído do evento de
- * webhook em `webhookRouter.ts`), busca a capa da DUIMP, confirma que quem
- * registrou é um despachante autorizado (evita disparar para DUIMPs de
- * clientes cujo despacho é feito por outra pessoa, mas que também aparecem
- * no Portal Único) e que o recinto aduaneiro é o RioGaleão (evita disparar
- * para cargas de outros aeroportos), descobre o AWB, emite o extrato em PDF
+ * Uma fila por DUIMP, para que eventos da mesma DUIMP sejam processados em
+ * sequência e não em paralelo.
+ *
+ * Sem isso a checagem de envio duplicado não adiantaria: o Portal Único
+ * dispara um evento a cada vinculação de carga, e numa DUIMP cujo registro
+ * falhou e foi repetido chegaram quatro eventos em dez minutos. Todos
+ * ficariam esperando o registro ao mesmo tempo, todos veriam "ainda não
+ * enviada" e todos mandariam e-mail.
+ */
+const filas = new Map<string, Promise<unknown>>();
+
+export function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
+  const anterior = filas.get(numeroDuimp) ?? Promise.resolve();
+  // `.then` com os dois callbacks: a falha de um evento não pode impedir
+  // que o próximo da mesma DUIMP seja processado.
+  const atual = anterior.then(
+    () => processarDuimp(numeroDuimp),
+    () => processarDuimp(numeroDuimp),
+  );
+
+  const naFila = atual.catch(() => undefined);
+  filas.set(numeroDuimp, naFila);
+  void naFila.then(() => {
+    if (filas.get(numeroDuimp) === naFila) {
+      filas.delete(numeroDuimp);
+    }
+  });
+
+  return atual;
+}
+
+/**
+ * Busca a capa da DUIMP, confirma que quem registrou é um despachante
+ * autorizado (evita disparar para DUIMPs de clientes cujo despacho é feito
+ * por outra pessoa, mas que também aparecem no Portal Único) e que o
+ * recinto tem destino configurado, descobre o AWB, emite o extrato em PDF
  * do CCT (equivalente à tela que hoje é enviada manualmente) e envia o
  * e-mail de solicitação de cálculo de armazenagem.
  */
-export async function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
+async function processarDuimp(numeroDuimp: string): Promise<void> {
+  const enviadoEm = envioRecente(numeroDuimp);
+  if (enviadoEm) {
+    console.log(
+      `DUIMP ${numeroDuimp} ignorada: solicitação já enviada em ` +
+        `${enviadoEm.toLocaleString("pt-BR")} (evento repetido de vinculação de carga).`,
+    );
+    return;
+  }
+
   const duimpCapa = await getDuimpCapaQuandoRegistrada(numeroDuimp);
 
   const cpfResponsavel = extrairCpfResponsavelDaCapa(duimpCapa);
@@ -87,6 +127,8 @@ export async function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
       },
     ],
   });
+
+  registrarEnvio(numeroDuimp);
 
   console.log(
     `DUIMP ${numeroDuimp} processada: e-mail ${config.mail.dryRun ? "SIMULADO (DRY_RUN)" : "enviado"} ` +
