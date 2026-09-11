@@ -75,6 +75,14 @@ export const config = {
       .map((cpf) => cpf.replace(/\D/g, ""))
       .filter(Boolean),
 
+    // Trecho procurado no texto de `informacaoComplementar` da DUIMP para
+    // reconhecer que o despacho é nosso. A Nicomex inclui uma linha padrão
+    // ("DECLARACAO DE IMPORTACAO REGISTRADA POR NCX ADUANA GESTAO
+    // ADUANEIRA...") em toda DUIMP que monta, independentemente de quem a
+    // registra — o que torna esse o critério mais confiável dos três.
+    // Comparação sem diferenciar maiúsculas/minúsculas. Vazio = desativado.
+    marcadorDespachoProprio: (process.env.PUCOMEX_MARCADOR_DESPACHO_PROPRIO ?? "NCX ADUANA").trim(),
+
     // CNPJs (só dígitos) de clientes cujo despacho é nosso, aceitos mesmo
     // quando a DUIMP foi registrada no CPF de outra pessoa — há clientes que
     // registram no CPF do próprio responsável da empresa, embora quem cuide

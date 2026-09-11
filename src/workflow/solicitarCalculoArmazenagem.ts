@@ -3,6 +3,7 @@ import {
   getDuimpItens,
   extrairAwbDaCapa,
   extrairCpfResponsavelDaCapa,
+  despachadaPelaNicomex,
   extrairCodigoRecintoDaCapa,
   extrairNomeImportadorDaCapa,
   extrairCnpjImportadorDaCapa,
@@ -68,26 +69,34 @@ async function processarDuimp(numeroDuimp: string): Promise<void> {
 
   const duimpCapa = await getDuimpCapaQuandoRegistrada(numeroDuimp);
 
-  // Duas formas de reconhecer que o despacho é nosso, em OU:
+  // Três formas de reconhecer que o despacho é nosso, em OU:
   //
-  // 1. Quem registrou a DUIMP é um despachante da casa (caso normal).
-  // 2. O importador é um cliente nosso — necessário para clientes que
-  //    registram a DUIMP no CPF do próprio responsável da empresa, embora
-  //    quem cuide do despacho (e precise pedir o cálculo) sejamos nós.
+  // 1. A DUIMP traz o texto padrão da Nicomex nas informações
+  //    complementares. É o critério mais confiável, porque a linha é
+  //    incluída ao montar a DUIMP, independentemente de quem a registra.
+  // 2. Quem registrou é um despachante da casa.
+  // 3. O importador está na lista de clientes nossos.
   //
-  // Sem nenhuma das duas listas preenchida, não há filtro.
+  // Os dois últimos são redes de segurança para o caso de o texto padrão
+  // faltar em alguma DUIMP. Sem nenhum critério configurado, não há filtro.
   const cpfResponsavel = extrairCpfResponsavelDaCapa(duimpCapa);
   const cnpjImportador = extrairCnpjImportadorDaCapa(duimpCapa);
-  const { cpfsResponsaveisAutorizados, cnpjsImportadoresAutorizados } = config.pucomex;
-  const temFiltro = cpfsResponsaveisAutorizados.length > 0 || cnpjsImportadoresAutorizados.length > 0;
-  const registradaPorDespachanteNosso = cpfsResponsaveisAutorizados.includes(cpfResponsavel ?? "");
-  const deClienteNosso = cnpjsImportadoresAutorizados.includes(cnpjImportador ?? "");
+  const { cpfsResponsaveisAutorizados, cnpjsImportadoresAutorizados, marcadorDespachoProprio } =
+    config.pucomex;
 
-  if (temFiltro && !registradaPorDespachanteNosso && !deClienteNosso) {
+  const temFiltro =
+    marcadorDespachoProprio.length > 0 ||
+    cpfsResponsaveisAutorizados.length > 0 ||
+    cnpjsImportadoresAutorizados.length > 0;
+  const nossoPeloTexto = despachadaPelaNicomex(duimpCapa);
+  const nossoPeloDespachante = cpfsResponsaveisAutorizados.includes(cpfResponsavel ?? "");
+  const nossoPeloCliente = cnpjsImportadoresAutorizados.includes(cnpjImportador ?? "");
+
+  if (temFiltro && !nossoPeloTexto && !nossoPeloDespachante && !nossoPeloCliente) {
     console.log(
-      `DUIMP ${numeroDuimp} ignorada: responsável pelo registro ` +
-        `(${cpfResponsavel ?? "desconhecido"}) não é despachante autorizado e o importador ` +
-        `(${cnpjImportador ?? "desconhecido"}) não está na lista de clientes.`,
+      `DUIMP ${numeroDuimp} ignorada: não identificada como despacho nosso ` +
+        `(sem o texto padrão nas informações complementares; responsável pelo registro ` +
+        `${cpfResponsavel ?? "desconhecido"}, importador ${cnpjImportador ?? "desconhecido"}).`,
     );
     return;
   }

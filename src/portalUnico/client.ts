@@ -330,6 +330,26 @@ export function extrairReferenciaNicomexDaCapa(capa: DuimpCapa): string | null {
 }
 
 /**
+ * Diz se a DUIMP foi despachada pela Nicomex, procurando o marcador no
+ * texto de `informacaoComplementar` (linha padrão que o despachante inclui
+ * ao montar a DUIMP: "DECLARACAO DE IMPORTACAO REGISTRADA POR NCX ADUANA
+ * GESTAO ADUANEIRA...").
+ *
+ * É o critério mais confiável que temos para "este despacho é nosso",
+ * porque independe de quem apertou o botão de registrar: há clientes que
+ * registram a DUIMP no CPF do próprio dono da empresa, ainda que o
+ * processo todo tenha sido montado aqui.
+ */
+export function despachadaPelaNicomex(capa: DuimpCapa): boolean {
+  const marcador = config.pucomex.marcadorDespachoProprio;
+  if (!marcador) {
+    return false;
+  }
+  const raw = capa.raw as { informacaoComplementar?: string } | undefined;
+  return (raw?.informacaoComplementar ?? "").toUpperCase().includes(marcador.toUpperCase());
+}
+
+/**
  * Busca a carga no CCT pelo número do AWB para descobrir o ID interno usado
  * nos demais endpoints (ex: emissão de extrato). Endpoint e payload
  * confirmados via chamada real:

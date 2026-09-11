@@ -54,23 +54,30 @@ Confirmado via testes reais (curl + inspeção de rede do navegador):
 
 O Portal Único mostra DUIMPs de clientes cujo despacho é feito por outra
 pessoa, não só as que o usuário registrou — sem filtro, a automação pediria
-cálculo de armazenagem para processos de terceiros. Duas listas resolvem
-isso, em **OU** (basta uma bater):
+cálculo de armazenagem para processos de terceiros. Três critérios
+resolvem isso, em **OU** (basta um bater):
 
+- `PUCOMEX_MARCADOR_DESPACHO_PROPRIO` (padrão `NCX ADUANA`) — procurado no
+  texto de `informacaoComplementar`. **É o critério principal**: a Nicomex
+  inclui uma linha padrão ("DECLARACAO DE IMPORTACAO REGISTRADA POR NCX
+  ADUANA GESTAO ADUANEIRA...") em toda DUIMP que monta, independentemente
+  de quem aperta o botão de registrar.
 - `PUCOMEX_CPFS_RESPONSAVEIS_AUTORIZADOS` — comparado com
-  `responsavelRegistroNumero` da capa. É o caso normal: a DUIMP foi
-  registrada por um despachante da casa.
+  `responsavelRegistroNumero` da capa: a DUIMP foi registrada por um
+  despachante da casa.
 - `PUCOMEX_CNPJS_IMPORTADORES_AUTORIZADOS` — comparado com o CNPJ do
-  importador. Necessário porque alguns clientes registram a DUIMP no CPF do
-  próprio responsável da empresa, embora quem cuide do despacho sejamos
-  nós.
+  importador.
 
-Com as duas listas vazias, não há filtro (não recomendado em produção).
+Os dois últimos são redes de segurança, para o caso de o texto padrão
+faltar em alguma DUIMP. Com os três vazios, não há filtro (não recomendado
+em produção).
 
-O filtro por CNPJ é mais amplo que o por CPF: vale para **todas** as DUIMPs
-daquele importador nos recintos atendidos, inclusive alguma que outro
-despachante venha a registrar. Só faz sentido para clientes cujo despacho
-aéreo é exclusivamente nosso.
+Por que o marcador de texto é o melhor critério: há clientes que registram
+a DUIMP no CPF do próprio dono da empresa (o processo é montado aqui, mas
+assinado com o certificado deles). Filtrar por CPF descartaria esses
+processos, e filtrar por CNPJ do importador exige cadastrar cliente a
+cliente — além de ser mais amplo do que se quer, já que aceitaria também
+uma DUIMP daquele importador registrada por outro despachante.
 
 ### Roteamento por recinto
 
