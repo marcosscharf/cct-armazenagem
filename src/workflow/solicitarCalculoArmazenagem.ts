@@ -68,12 +68,26 @@ async function processarDuimp(numeroDuimp: string): Promise<void> {
 
   const duimpCapa = await getDuimpCapaQuandoRegistrada(numeroDuimp);
 
+  // Duas formas de reconhecer que o despacho é nosso, em OU:
+  //
+  // 1. Quem registrou a DUIMP é um despachante da casa (caso normal).
+  // 2. O importador é um cliente nosso — necessário para clientes que
+  //    registram a DUIMP no CPF do próprio responsável da empresa, embora
+  //    quem cuide do despacho (e precise pedir o cálculo) sejamos nós.
+  //
+  // Sem nenhuma das duas listas preenchida, não há filtro.
   const cpfResponsavel = extrairCpfResponsavelDaCapa(duimpCapa);
-  const { cpfsResponsaveisAutorizados } = config.pucomex;
-  if (cpfsResponsaveisAutorizados.length > 0 && !cpfsResponsaveisAutorizados.includes(cpfResponsavel ?? "")) {
+  const cnpjImportador = extrairCnpjImportadorDaCapa(duimpCapa);
+  const { cpfsResponsaveisAutorizados, cnpjsImportadoresAutorizados } = config.pucomex;
+  const temFiltro = cpfsResponsaveisAutorizados.length > 0 || cnpjsImportadoresAutorizados.length > 0;
+  const registradaPorDespachanteNosso = cpfsResponsaveisAutorizados.includes(cpfResponsavel ?? "");
+  const deClienteNosso = cnpjsImportadoresAutorizados.includes(cnpjImportador ?? "");
+
+  if (temFiltro && !registradaPorDespachanteNosso && !deClienteNosso) {
     console.log(
-      `DUIMP ${numeroDuimp} ignorada: responsável pelo registro (${cpfResponsavel ?? "desconhecido"}) ` +
-        `não está na lista de despachantes autorizados.`,
+      `DUIMP ${numeroDuimp} ignorada: responsável pelo registro ` +
+        `(${cpfResponsavel ?? "desconhecido"}) não é despachante autorizado e o importador ` +
+        `(${cnpjImportador ?? "desconhecido"}) não está na lista de clientes.`,
     );
     return;
   }
@@ -102,7 +116,6 @@ async function processarDuimp(numeroDuimp: string): Promise<void> {
     gerarExtratoDuimpPdf(duimpCapa, duimpItens),
   ]);
 
-  const cnpjImportador = extrairCnpjImportadorDaCapa(duimpCapa);
   const cnpjPagador = cnpjImportador ? config.pucomex.cnpjPagadorOverrides[cnpjImportador] ?? null : null;
   const nomeImportador = extrairNomeImportadorDaCapa(duimpCapa);
   const referenciaNicomex = extrairReferenciaNicomexDaCapa(duimpCapa);

@@ -75,6 +75,18 @@ export const config = {
       .map((cpf) => cpf.replace(/\D/g, ""))
       .filter(Boolean),
 
+    // CNPJs (só dígitos) de clientes cujo despacho é nosso, aceitos mesmo
+    // quando a DUIMP foi registrada no CPF de outra pessoa — há clientes que
+    // registram no CPF do próprio responsável da empresa, embora quem cuide
+    // do despacho (e precise pedir o cálculo de armazenagem) sejamos nós.
+    // Comparado com o CNPJ do importador na capa da DUIMP. Atenção: vale
+    // para *todas* as DUIMPs do CNPJ, inclusive as que outro despachante
+    // eventualmente registre.
+    cnpjsImportadoresAutorizados: (process.env.PUCOMEX_CNPJS_IMPORTADORES_AUTORIZADOS ?? "")
+      .split(",")
+      .map((cnpj) => cnpj.replace(/\D/g, ""))
+      .filter(Boolean),
+
     // Casos em que a fatura de armazenagem deve sair contra um CNPJ
     // diferente do CNPJ do importador na DUIMP (ex: cliente PERENCO — CNPJ
     // do importador 09.309.027/0003-05, mas quem deve ser cobrado é o CNPJ

@@ -50,10 +50,27 @@ Confirmado via testes reais (curl + inspeção de rede do navegador):
   Histórico e uma página por item (produto, fabricante, exportador,
   tributos).
 
-Também implementado: a automação só processa DUIMPs cujo
-`responsavelRegistroNumero` esteja em `PUCOMEX_CPFS_RESPONSAVEIS_AUTORIZADOS`
-— necessário porque o Portal Único mostra DUIMPs de clientes cujo despacho é
-feito por outra pessoa, não só as que o usuário mesmo registrou.
+### Reconhecendo o que é despacho nosso
+
+O Portal Único mostra DUIMPs de clientes cujo despacho é feito por outra
+pessoa, não só as que o usuário registrou — sem filtro, a automação pediria
+cálculo de armazenagem para processos de terceiros. Duas listas resolvem
+isso, em **OU** (basta uma bater):
+
+- `PUCOMEX_CPFS_RESPONSAVEIS_AUTORIZADOS` — comparado com
+  `responsavelRegistroNumero` da capa. É o caso normal: a DUIMP foi
+  registrada por um despachante da casa.
+- `PUCOMEX_CNPJS_IMPORTADORES_AUTORIZADOS` — comparado com o CNPJ do
+  importador. Necessário porque alguns clientes registram a DUIMP no CPF do
+  próprio responsável da empresa, embora quem cuide do despacho sejamos
+  nós.
+
+Com as duas listas vazias, não há filtro (não recomendado em produção).
+
+O filtro por CNPJ é mais amplo que o por CPF: vale para **todas** as DUIMPs
+daquele importador nos recintos atendidos, inclusive alguma que outro
+despachante venha a registrar. Só faz sentido para clientes cujo despacho
+aéreo é exclusivamente nosso.
 
 ### Roteamento por recinto
 
