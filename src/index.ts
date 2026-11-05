@@ -1,3 +1,4 @@
+import "./carimboDeHora";
 import express from "express";
 import { config } from "./config";
 import { webhookRouter } from "./portalUnico/webhookRouter";

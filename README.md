@@ -248,6 +248,27 @@ esperas crescentes (15s, 30s, 1min, 2min, 5min — ~9 minutos no total) ao
 receber esse erro específico. Como o processamento roda em segundo plano,
 essa espera não afeta o Portal Único.
 
+**Falhas passageiras do Portal Único**: todas as chamadas (leitura da
+DUIMP, itens, busca da carga no CCT, extrato do CCT) passam por
+`comRetentativas`, que repete com as mesmas esperas quando o Portal Único
+responde 5xx ou a conexão cai. Antes isso só valia para a leitura da DUIMP,
+e um `503` no extrato do CCT fez uma solicitação se perder. Como o Portal
+Único não reenvia a notificação depois que respondemos 200, desistir de uma
+falha passageira em qualquer etapa perde o e-mail de vez.
+
+**Login compartilhado**: o Portal Único recusa um segundo login em menos de
+60 segundos (`PLAT-ER2033`). Quando a sessão expirava, as chamadas que o
+workflow faz em paralelo pediam login cada uma e a segunda era recusada —
+três solicitações perdidas assim. Agora um login em andamento é
+compartilhado por todas as chamadas que precisarem de sessão, e um
+`PLAT-ER2033` ainda assim recebido (a mesma Chave de Acesso usada em outro
+lugar, por exemplo) gera espera e nova tentativa.
+
+**Data e hora nos logs**: `src/carimboDeHora.ts` prefixa cada linha do
+`out.log` e do `err.log` com data e hora de Brasília
+(`[2026-11-05 14:32:10]`), o que permite filtrar por dia com
+`Select-String "2026-11-05"`.
+
 **Nota**: o ambiente onde este projeto é desenvolvido bloqueia acesso de
 rede a `portalunico.siscomex.gov.br` — os testes acima foram feitos rodando
 os comandos manualmente na máquina do usuário, não automatizados aqui. Todo

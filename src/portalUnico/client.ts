@@ -11,6 +11,32 @@ interface Session {
 let sessionCache: Session | null = null;
 
 /**
+ * Login em andamento, compartilhado por quem pedir sessão enquanto ele não
+ * termina.
+ *
+ * O Portal Único recusa um segundo login feito menos de 60 segundos depois
+ * do anterior (`PLAT-ER2033 - Usuário realizou autenticação válida nos
+ * últimos 60 segundos. O token gerado deve ser reaproveitado`). Sem isso,
+ * quando a sessão expirava, as chamadas que o workflow dispara em paralelo
+ * (carga no CCT + itens da DUIMP, ou duas DUIMPs ao mesmo tempo) pediam
+ * login cada uma, e a segunda era recusada. Observado em produção: três
+ * solicitações perdidas por esse motivo.
+ */
+let loginEmAndamento: Promise<Session> | null = null;
+
+async function authenticate(): Promise<Session> {
+  if (sessionCache && sessionCache.expiresAt > Date.now() + 5_000) {
+    return sessionCache;
+  }
+  if (!loginEmAndamento) {
+    loginEmAndamento = autenticarNoPortal().finally(() => {
+      loginEmAndamento = null;
+    });
+  }
+  return loginEmAndamento;
+}
+
+/**
  * Troca o par Client-Id / Client-Secret (Chave de Acesso) por uma sessão
  * autenticada, conforme docs.portalunico.siscomex.gov.br/api/plat/:
  * POST {authBaseUrl}/api/autenticar/chave-acesso
@@ -23,11 +49,7 @@ let sessionCache: Session | null = null;
  * header `X-CSRF-Token` da autenticação). A validade do CSRF token vem no
  * header `X-CSRF-Expiration` (epoch em milissegundos).
  */
-async function authenticate(): Promise<Session> {
-  if (sessionCache && sessionCache.expiresAt > Date.now() + 5_000) {
-    return sessionCache;
-  }
-
+async function autenticarNoPortal(): Promise<Session> {
   const response = await axios.post(
     `${config.pucomex.authBaseUrl}/api/autenticar/chave-acesso`,
     undefined,
@@ -102,15 +124,30 @@ function ehDuimpAindaNaoRegistrada(err: unknown): boolean {
 }
 
 /**
- * Falha momentânea do lado do Portal Único: erro 5xx (observado em
- * produção: `500 PUCX-ER0001 - Ocorreu um erro inesperado`) ou queda de
- * conexão, sem resposta HTTP. Não é problema do nosso pedido, então
- * repetir tem chance real de funcionar.
+ * 422 com `PLAT-ER2033`: login recusado porque outro foi feito há menos de
+ * 60 segundos. O compartilhamento do login em `authenticate` evita isso
+ * dentro deste serviço, mas a mesma Chave de Acesso pode estar em uso em
+ * outro lugar (um teste local, por exemplo). Esperar e tentar de novo
+ * resolve.
+ */
+function ehLoginRecente(err: unknown): boolean {
+  return (
+    axios.isAxiosError(err) &&
+    err.response?.status === 422 &&
+    err.response.data?.code === "PLAT-ER2033"
+  );
+}
+
+/**
+ * Falha momentânea do lado do Portal Único: erro 5xx (observados em
+ * produção: `500 PUCX-ER0001 - Ocorreu um erro inesperado` e `503` no
+ * extrato do CCT) ou queda de conexão, sem resposta HTTP. Não é problema do
+ * nosso pedido, então repetir tem chance real de funcionar.
  *
  * 4xx fica de fora de propósito: são respostas sobre o pedido em si (não
  * existe, sem permissão, formato inválido) e repetir só atrasaria o
- * inevitável — a única exceção é o 422 de "ainda não registrada", tratado
- * separadamente acima.
+ * inevitável. As exceções são o login recente e, na leitura da DUIMP, o
+ * "ainda não registrada".
  */
 function ehFalhaTransitoria(err: unknown): boolean {
   if (!axios.isAxiosError(err)) {
@@ -120,47 +157,71 @@ function ehFalhaTransitoria(err: unknown): boolean {
   return status === undefined || status >= 500;
 }
 
-/**
- * Esperas entre tentativas (~9 minutos no total). O evento
- * `ccti-vinc-docto-saida` pode chegar alguns segundos antes de a DUIMP
- * ficar consultável — observado em produção: vinculação às 17:44:32 e
- * consulta recusada com "Duimp não registrada" às 17:44:39.
- */
-const ESPERAS_REGISTRO_MS = [15_000, 30_000, 60_000, 120_000, 300_000];
+/** Por que vale repetir a chamada, ou null quando não vale. */
+type MotivoParaRepetir = (err: unknown) => string | null;
+
+const motivoTransitorio: MotivoParaRepetir = (err) => {
+  if (ehLoginRecente(err)) {
+    return "login recente no Portal Único, aguardando para entrar de novo";
+  }
+  if (ehFalhaTransitoria(err)) {
+    return `falha momentânea do Portal Único (${descreverErro(err)})`;
+  }
+  return null;
+};
 
 /**
- * Busca a capa da DUIMP, aguardando quando ela ainda não foi registrada ou
- * quando o Portal Único falha momentaneamente.
+ * Esperas entre tentativas (~9 minutos no total). Cobrem tanto a DUIMP que
+ * ainda não ficou consultável (observado: vinculação às 17:44:32 e consulta
+ * recusada com "Duimp não registrada" às 17:44:39) quanto instabilidades do
+ * Portal Único, que costumam durar minutos.
+ */
+const ESPERAS_MS = [15_000, 30_000, 60_000, 120_000, 300_000];
+
+/**
+ * Executa uma chamada ao Portal Único repetindo-a enquanto a falha for
+ * passageira.
+ *
+ * Vale para todas as chamadas, não só a leitura da DUIMP: o Portal Único não
+ * reenvia a notificação depois que respondemos 200, então desistir de uma
+ * falha passageira em qualquer etapa perde a solicitação de vez. Observado
+ * em produção: extrato do CCT respondendo 503, e-mail não enviado.
  *
  * O processamento roda em segundo plano (a resposta ao webhook já foi
- * enviada), então esperar aqui não afeta o Portal Único. E como o Portal
- * Único não reenvia a notificação depois que respondemos 200, desistir de
- * uma falha transitória significa perder a solicitação de vez — daí valer
- * insistir.
+ * enviada), então esperar aqui não afeta o Portal Único. Cada tentativa
+ * pede a sessão de novo, o que renova o login se ele expirar durante a
+ * espera.
  */
-export async function getDuimpCapaQuandoRegistrada(
-  numeroDuimp: string,
-  esperasMs: number[] = ESPERAS_REGISTRO_MS,
-): Promise<DuimpCapa> {
+async function comRetentativas<T>(
+  descricao: string,
+  operacao: () => Promise<T>,
+  motivoParaRepetir: MotivoParaRepetir = motivoTransitorio,
+): Promise<T> {
   for (let tentativa = 0; ; tentativa += 1) {
     try {
-      return await getDuimpCapa(numeroDuimp);
+      return await operacao();
     } catch (err) {
-      const naoRegistrada = ehDuimpAindaNaoRegistrada(err);
-      if ((!naoRegistrada && !ehFalhaTransitoria(err)) || tentativa >= esperasMs.length) {
+      const motivo = motivoParaRepetir(err);
+      if (!motivo || tentativa >= ESPERAS_MS.length) {
         throw err;
       }
-      const espera = esperasMs[tentativa];
-      const motivo = naoRegistrada
-        ? "ainda não registrada"
-        : `falha momentânea do Portal Único (${descreverErro(err)})`;
+      const espera = ESPERAS_MS[tentativa];
       console.log(
-        `DUIMP ${numeroDuimp} ${motivo}; nova tentativa em ${espera / 1000}s ` +
-          `(${tentativa + 1}/${esperasMs.length}).`,
+        `${descricao}: ${motivo}; nova tentativa em ${espera / 1000}s ` +
+          `(${tentativa + 1}/${ESPERAS_MS.length}).`,
       );
       await new Promise((resolve) => setTimeout(resolve, espera));
     }
   }
+}
+
+/** Busca a capa da DUIMP, aguardando quando ela ainda não foi registrada. */
+export function getDuimpCapaQuandoRegistrada(numeroDuimp: string): Promise<DuimpCapa> {
+  return comRetentativas(
+    `DUIMP ${numeroDuimp}`,
+    () => getDuimpCapa(numeroDuimp),
+    (err) => (ehDuimpAindaNaoRegistrada(err) ? "ainda não registrada" : motivoTransitorio(err)),
+  );
 }
 
 export interface DuimpItem {
@@ -219,28 +280,30 @@ export interface AtributoDuimp {
  * e, se cair nesse erro, extraímos o limite real da mensagem e tentamos de
  * novo.
  */
-export async function getDuimpItens(numeroDuimp: string, versaoDuimp: string): Promise<DuimpItem[]> {
-  const client = await httpClient();
+export function getDuimpItens(numeroDuimp: string, versaoDuimp: string): Promise<DuimpItem[]> {
+  return comRetentativas(`Itens da DUIMP ${numeroDuimp}`, async () => {
+    const client = await httpClient();
 
-  const buscarItens = (faixaItens: string) =>
-    client.get(`/duimp/api/duimp/extrato/${numeroDuimp}/${versaoDuimp}/itens`, {
-      params: { "faixa-itens": faixaItens, cache: true },
-    });
+    const buscarItens = (faixaItens: string) =>
+      client.get(`/duimp/api/duimp/extrato/${numeroDuimp}/${versaoDuimp}/itens`, {
+        params: { "faixa-itens": faixaItens, cache: true },
+      });
 
-  try {
-    const { data } = await buscarItens("1-999");
-    return data;
-  } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.status === 422) {
-      const mensagem: string = err.response.data?.message ?? "";
-      const match = /último item ativo:\s*(\d+)/i.exec(mensagem);
-      if (match) {
-        const { data } = await buscarItens(`1-${match[1]}`);
-        return data;
+    try {
+      const { data } = await buscarItens("1-999");
+      return data;
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 422) {
+        const mensagem: string = err.response.data?.message ?? "";
+        const match = /último item ativo:\s*(\d+)/i.exec(mensagem);
+        if (match) {
+          const { data } = await buscarItens(`1-${match[1]}`);
+          return data;
+        }
       }
+      throw err;
     }
-    throw err;
-  }
+  });
 }
 
 interface PalavraChave {
@@ -359,9 +422,12 @@ export function despachadaPelaNicomex(capa: DuimpCapa): boolean {
 export async function buscarCargaPorAwb(
   numeroAwb: string,
 ): Promise<{ idCarga: string; raw: unknown }> {
-  const client = await httpClient();
-  const { data } = await client.get(`/ccta-backend/api/carga/consulta/${numeroAwb}`, {
-    params: { situacao: "A" },
+  const data = await comRetentativas(`Busca da carga ${numeroAwb} no CCT`, async () => {
+    const client = await httpClient();
+    const response = await client.get(`/ccta-backend/api/carga/consulta/${numeroAwb}`, {
+      params: { situacao: "A" },
+    });
+    return response.data;
   });
   const primeiraCarga = Array.isArray(data) ? data[0] : data;
   const idCarga = primeiraCarga?.idCarga;
@@ -379,10 +445,12 @@ export async function buscarCargaPorAwb(
  * "Emitir Extrato" na tela do CCT) — confirmado via inspeção de rede real:
  * GET /ccta-backend/api/carga/{idCarga}/extrato -> application/pdf
  */
-export async function getCctExtratoPdf(idCarga: string): Promise<Buffer> {
-  const client = await httpClient();
-  const response = await client.get(`/ccta-backend/api/carga/${idCarga}/extrato`, {
-    responseType: "arraybuffer",
+export function getCctExtratoPdf(idCarga: string): Promise<Buffer> {
+  return comRetentativas(`Extrato do CCT (carga ${idCarga})`, async () => {
+    const client = await httpClient();
+    const response = await client.get(`/ccta-backend/api/carga/${idCarga}/extrato`, {
+      responseType: "arraybuffer",
+    });
+    return Buffer.from(response.data);
   });
-  return Buffer.from(response.data);
 }
