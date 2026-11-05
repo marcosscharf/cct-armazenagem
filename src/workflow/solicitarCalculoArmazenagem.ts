@@ -9,6 +9,7 @@ import {
   extrairCnpjImportadorDaCapa,
   extrairReferenciaNicomexDaCapa,
   buscarCargaPorAwb,
+  CargaNaoEncontradaError,
   getCctExtratoPdf,
 } from "../portalUnico/client";
 import { gerarExtratoDuimpPdf } from "../portalUnico/duimpExtratoPdf";
@@ -29,13 +30,16 @@ import { config } from "../config";
  */
 const filas = new Map<string, Promise<unknown>>();
 
-export function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
+export function handleDuimpRegistro(
+  numeroDuimp: string,
+  identificacaoCargaDoEvento: string | null = null,
+): Promise<void> {
   const anterior = filas.get(numeroDuimp) ?? Promise.resolve();
   // `.then` com os dois callbacks: a falha de um evento não pode impedir
   // que o próximo da mesma DUIMP seja processado.
   const atual = anterior.then(
-    () => processarDuimp(numeroDuimp),
-    () => processarDuimp(numeroDuimp),
+    () => processarDuimp(numeroDuimp, identificacaoCargaDoEvento),
+    () => processarDuimp(numeroDuimp, identificacaoCargaDoEvento),
   );
 
   const naFila = atual.catch(() => undefined);
@@ -50,6 +54,62 @@ export function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
 }
 
 /**
+ * Encontra a carga no CCT, devolvendo o AWB que funcionou (é o que vai no
+ * e-mail) e o ID interno da carga.
+ *
+ * Tenta primeiro o AWB digitado na DUIMP e, se o CCT não o conhecer, a
+ * identificação da carga que o próprio CCT mandou no evento de vinculação.
+ * Observado em produção: duas DUIMPs com AWB master `0012794574A` e
+ * `0570595214A`, enquanto o evento trazia `001-27945746` e `057-05952144` —
+ * o último dígito trocado por um "A" na DUIMP. A busca pelo AWB da DUIMP não
+ * achava nada e as duas solicitações se perderam.
+ *
+ * A identificação do evento é tentada como veio e também só com os dígitos,
+ * que é como o CCT aceita AWB master (um evento com `006-53690361` foi
+ * processado normalmente como `00653690361`).
+ *
+ * Só "carga não encontrada" passa para o próximo número. Uma falha do Portal
+ * Único é propagada: tentar outro número não resolveria uma instabilidade.
+ */
+async function localizarCarga(
+  numeroDuimp: string,
+  awbDaDuimp: string | null,
+  identificacaoCargaDoEvento: string | null,
+): Promise<{ numeroAwb: string; idCarga: string }> {
+  const candidatos = [
+    awbDaDuimp,
+    identificacaoCargaDoEvento,
+    identificacaoCargaDoEvento?.replace(/[^0-9A-Za-z]/g, ""),
+  ].filter((numero, indice, todos): numero is string => !!numero && todos.indexOf(numero) === indice);
+
+  if (candidatos.length === 0) {
+    throw new Error(
+      `Nenhum AWB (Conhecimento de Embarque) encontrado na DUIMP ${numeroDuimp}, ` +
+        `nem identificação da carga no evento`,
+    );
+  }
+
+  for (const numero of candidatos) {
+    try {
+      const { idCarga } = await buscarCargaPorAwb(numero);
+      if (numero !== awbDaDuimp) {
+        console.log(
+          `DUIMP ${numeroDuimp}: AWB da DUIMP (${awbDaDuimp ?? "ausente"}) não encontrado no CCT; ` +
+            `usando a identificação da carga informada pelo Portal Único (${numero}).`,
+        );
+      }
+      return { numeroAwb: numero, idCarga };
+    } catch (err) {
+      if (!(err instanceof CargaNaoEncontradaError)) {
+        throw err;
+      }
+    }
+  }
+
+  throw new Error(`Carga da DUIMP ${numeroDuimp} não encontrada no CCT com nenhum destes números: ${candidatos.join(", ")}`);
+}
+
+/**
  * Busca a capa da DUIMP, confirma que quem registrou é um despachante
  * autorizado (evita disparar para DUIMPs de clientes cujo despacho é feito
  * por outra pessoa, mas que também aparecem no Portal Único) e que o
@@ -57,7 +117,10 @@ export function handleDuimpRegistro(numeroDuimp: string): Promise<void> {
  * do CCT (equivalente à tela que hoje é enviada manualmente) e envia o
  * e-mail de solicitação de cálculo de armazenagem.
  */
-async function processarDuimp(numeroDuimp: string): Promise<void> {
+async function processarDuimp(
+  numeroDuimp: string,
+  identificacaoCargaDoEvento: string | null,
+): Promise<void> {
   const enviadoEm = envioRecente(numeroDuimp);
   if (enviadoEm) {
     console.log(
@@ -111,13 +174,8 @@ async function processarDuimp(numeroDuimp: string): Promise<void> {
     return;
   }
 
-  const numeroAwb = extrairAwbDaCapa(duimpCapa);
-  if (!numeroAwb) {
-    throw new Error(`Nenhum AWB (Conhecimento de Embarque) encontrado na DUIMP ${numeroDuimp}`);
-  }
-
-  const [{ idCarga }, duimpItens] = await Promise.all([
-    buscarCargaPorAwb(numeroAwb),
+  const [{ numeroAwb, idCarga }, duimpItens] = await Promise.all([
+    localizarCarga(numeroDuimp, extrairAwbDaCapa(duimpCapa), identificacaoCargaDoEvento),
     getDuimpItens(numeroDuimp, duimpCapa.versao),
   ]);
   const [cctExtratoPdf, duimpExtratoPdf] = await Promise.all([

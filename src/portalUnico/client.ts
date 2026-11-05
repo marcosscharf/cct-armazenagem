@@ -419,6 +419,13 @@ export function despachadaPelaNicomex(capa: DuimpCapa): boolean {
  * GET /ccta-backend/api/carga/consulta/{numeroAwb}?situacao=A
  * -> array de cargas, cada uma com o campo `idCarga`.
  */
+/**
+ * O CCT respondeu, mas não tem carga com esse número. É diferente de uma
+ * falha de conexão: aqui vale tentar outro número para a mesma carga, e lá
+ * não.
+ */
+export class CargaNaoEncontradaError extends Error {}
+
 export async function buscarCargaPorAwb(
   numeroAwb: string,
 ): Promise<{ idCarga: string; raw: unknown }> {
@@ -432,7 +439,7 @@ export async function buscarCargaPorAwb(
   const primeiraCarga = Array.isArray(data) ? data[0] : data;
   const idCarga = primeiraCarga?.idCarga;
   if (!idCarga) {
-    throw new Error(
+    throw new CargaNaoEncontradaError(
       `Não foi possível extrair o ID interno da carga para o AWB ${numeroAwb}. ` +
         `Resposta recebida: ${JSON.stringify(data)}`,
     );

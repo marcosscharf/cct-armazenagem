@@ -134,3 +134,20 @@ export function extrairNumeroDuimpDoEvento(
 
   return null;
 }
+
+/**
+ * Identificação da carga informada pelo próprio CCT no evento de vinculação
+ * (ex: `"001-27945746"`, `"ESHA2602083"`). Serve de alternativa quando o AWB
+ * digitado na DUIMP não é encontrado no CCT. Só o evento
+ * `ccti-vinc-docto-saida` traz esse campo.
+ */
+export function extrairIdentificacaoCargaDoEvento(
+  eventType: string | undefined,
+  body: unknown,
+): string | null {
+  if (eventType !== "ccti-vinc-docto-saida") {
+    return null;
+  }
+  const identificacao = (body as CctVinculacaoDocumentoSaidaEvent | null)?.identificacaoCarga;
+  return typeof identificacao === "string" && identificacao.trim() ? identificacao.trim() : null;
+}

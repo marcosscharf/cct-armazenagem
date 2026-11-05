@@ -269,6 +269,17 @@ lugar, por exemplo) gera espera e nova tentativa.
 (`[2026-11-05 14:32:10]`), o que permite filtrar por dia com
 `Select-String "2026-11-05"`.
 
+**AWB da DUIMP não encontrado no CCT**: o AWB vem de um campo digitado na
+DUIMP e pode ter erro. Observado em produção: duas DUIMPs com AWB master
+`0012794574A` e `0570595214A`, enquanto o evento de vinculação trazia
+`001-27945746` e `057-05952144` (último dígito trocado por "A"). Como o
+evento `ccti-vinc-docto-saida` vem do próprio CCT, o `identificacaoCarga`
+dele é tentado quando o CCT não conhece o AWB da DUIMP — primeiro como veio
+e depois só com os dígitos, que é como o CCT aceita AWB master. O e-mail
+sai com o número que o CCT reconheceu. Só "carga não encontrada" leva ao
+próximo número; uma falha do Portal Único é repetida normalmente, sem
+trocar de número.
+
 **Nota**: o ambiente onde este projeto é desenvolvido bloqueia acesso de
 rede a `portalunico.siscomex.gov.br` — os testes acima foram feitos rodando
 os comandos manualmente na máquina do usuário, não automatizados aqui. Todo
